@@ -1,144 +1,500 @@
 from src.estructuras.nodo import Nodo
 
 
-class BST:
-    def __init__(self):
+class ArbolBST:
+
+  def __init__(self):
+    self.raiz = None
+
+
+  # --------------------------------------------------
+  # INSERTAR
+  # --------------------------------------------------
+
+  # método público de insertar
+  def insertar(self, dato):
+
+    nodo = Nodo(dato)
+
+    if self.raiz is None:
+
+      self.raiz = nodo
+
+      # la raíz no tiene padre
+      nodo.setPadre(None)
+
+      print(
+        "El valor ",
+        dato,
+        " se ha insertado como raíz del árbol"
+      )
+
+    else:
+
+      self._insertar(
+        nodo,
+        self.raiz
+      )
+
+
+  # método privado de insertar
+  def _insertar(self, nodo, raizActual):
+
+    # se valida igualdad
+    if raizActual.getValor() == nodo.getValor():
+
+      print(
+        "Ya existe un nodo con valor ",
+        nodo.getValor()
+      )
+
+    else:
+
+      # si es menor se va por la izquierda
+      if nodo.getValor() < raizActual.getValor():
+
+        izq = raizActual.getHijoIzquierdo()
+
+        if izq is None:
+
+          raizActual.setHijoIzquierdo(nodo)
+
+          # se establece el padre
+          nodo.setPadre(raizActual)
+
+          print(
+            nodo.getValor(),
+            " se ha insertado como hijo izquierdo de ",
+            raizActual.getValor()
+          )
+
+        else:
+
+          self._insertar(
+            nodo,
+            izq
+          )
+
+
+      # si es mayor se va por la derecha
+      else:
+
+        der = raizActual.getHijoDerecho()
+
+        if der is None:
+
+          raizActual.setHijoDerecho(nodo)
+
+          # se establece el padre
+          nodo.setPadre(raizActual)
+
+          print(
+            nodo.getValor(),
+            " se ha insertado como hijo derecho de ",
+            raizActual.getValor()
+          )
+
+        else:
+
+          self._insertar(
+            nodo,
+            der
+          )
+
+
+  # --------------------------------------------------
+  # BUSCAR
+  # --------------------------------------------------
+
+  # método público de buscar
+  def buscar(self, dato):
+
+    if self.raiz is None:
+
+      print("El árbol está vacío")
+
+      return None
+
+    else:
+
+      return self._buscar(
+        dato,
+        self.raiz
+      )
+
+
+  # método privado de buscar
+  def _buscar(self, dato, raizActual):
+
+    if dato == raizActual.getValor():
+
+      return raizActual
+
+
+    if dato < raizActual.getValor():
+
+      izq = raizActual.getHijoIzquierdo()
+
+      if izq is None:
+
+        return None
+
+      else:
+
+        return self._buscar(
+          dato,
+          izq
+        )
+
+
+    else:
+
+      der = raizActual.getHijoDerecho()
+
+      if der is None:
+
+        return None
+
+      else:
+
+        return self._buscar(
+          dato,
+          der
+        )
+
+
+  # --------------------------------------------------
+  # RECORRIDO PREORDEN
+  # raíz - izquierda - derecha
+  # --------------------------------------------------
+
+  def preorden(self):
+
+    if self.raiz is None:
+
+      print("El árbol está vacío")
+
+    else:
+
+      self._preorden(
+        self.raiz
+      )
+
+
+  def _preorden(self, raizActual):
+
+    if raizActual is not None:
+
+      print(
+        raizActual.getValor()
+      )
+
+      self._preorden(
+        raizActual.getHijoIzquierdo()
+      )
+
+      self._preorden(
+        raizActual.getHijoDerecho()
+      )
+
+
+  # --------------------------------------------------
+  # RECORRIDO INORDEN
+  # izquierda - raíz - derecha
+  # --------------------------------------------------
+
+  def inorden(self):
+
+    if self.raiz is None:
+
+      print("El árbol está vacío")
+
+    else:
+
+      self._inorden(
+        self.raiz
+      )
+
+
+  def _inorden(self, raizActual):
+
+    if raizActual is not None:
+
+      self._inorden(
+        raizActual.getHijoIzquierdo()
+      )
+
+      print(
+        raizActual.getValor()
+      )
+
+      self._inorden(
+        raizActual.getHijoDerecho()
+      )
+
+
+  # --------------------------------------------------
+  # RECORRIDO POSORDEN
+  # izquierda - derecha - raíz
+  # --------------------------------------------------
+
+  def posorden(self):
+
+    if self.raiz is None:
+
+      print("El árbol está vacío")
+
+    else:
+
+      self._posorden(
+        self.raiz
+      )
+
+
+  def _posorden(self, raizActual):
+
+    if raizActual is not None:
+
+      self._posorden(
+        raizActual.getHijoIzquierdo()
+      )
+
+      self._posorden(
+        raizActual.getHijoDerecho()
+      )
+
+      print(
+        raizActual.getValor()
+      )
+
+
+  # --------------------------------------------------
+  # ELIMINAR
+  # --------------------------------------------------
+
+  # método público de eliminar
+  def eliminar(self, dato):
+
+    if self.raiz is None:
+
+      print("El árbol está vacío")
+
+    else:
+
+      nodo = self.buscar(dato)
+
+      if nodo is None:
+
+        print(
+          "No existe un nodo con valor ",
+          dato
+        )
+
+      else:
+
+        self._eliminar(
+          nodo
+        )
+
+        print(
+          "Se eliminó el nodo ",
+          dato
+        )
+
+
+  # método privado de eliminar
+  def _eliminar(self, nodo):
+
+    # ------------------------------------------------
+    # CASO 1
+    # el nodo es una hoja
+    # ------------------------------------------------
+
+    if (
+      nodo.getHijoIzquierdo() is None
+      and
+      nodo.getHijoDerecho() is None
+    ):
+
+      padre = nodo.getPadre()
+
+      # si el nodo es la raíz
+      if padre is None:
+
         self.raiz = None
 
-    def insertar(self, evento):
-        self.raiz = self._insertar_recursivo(self.raiz, evento)
+      else:
 
-    def _insertar_recursivo(self, nodo, evento):
-        if nodo is None:
-            return Nodo(evento)
+        # se determina si es hijo izquierdo
+        if padre.getHijoIzquierdo() == nodo:
 
-        if evento.clave() < nodo.evento.clave():
-            nodo.izquierda = self._insertar_recursivo(nodo.izquierda, evento)
-        elif evento.clave() > nodo.evento.clave():
-            nodo.derecha = self._insertar_recursivo(nodo.derecha, evento)
+          padre.setHijoIzquierdo(None)
+
+        # de lo contrario es hijo derecho
         else:
-            raise ValueError("No se permiten claves duplicadas en el arbol.")
 
-        return nodo
+          padre.setHijoDerecho(None)
 
-    def buscar(self, evento):
-        return self._buscar_recursivo(self.raiz, evento.clave())
+      nodo.setPadre(None)
 
-    def buscar_por_clave(self, clave):
-        return self._buscar_recursivo(self.raiz, clave)
+      return
 
-    def _buscar_recursivo(self, nodo, clave):
-        if nodo is None:
-            return None
 
-        if clave == nodo.evento.clave():
-            return nodo.evento
-        if clave < nodo.evento.clave():
-            return self._buscar_recursivo(nodo.izquierda, clave)
-        return self._buscar_recursivo(nodo.derecha, clave)
+    # ------------------------------------------------
+    # CASO 2
+    # solamente tiene hijo derecho
+    # ------------------------------------------------
 
-    def eliminar(self, evento):
-        self.raiz = self._eliminar_recursivo(self.raiz, evento.clave())
+    if nodo.getHijoIzquierdo() is None:
 
-    def eliminar_por_clave(self, clave):
-        self.raiz = self._eliminar_recursivo(self.raiz, clave)
+      hijo = nodo.getHijoDerecho()
+      padre = nodo.getPadre()
 
-    def _eliminar_recursivo(self, nodo, clave):
-        if nodo is None:
-            return None
+      # si el nodo es la raíz
+      if padre is None:
 
-        if clave < nodo.evento.clave():
-            nodo.izquierda = self._eliminar_recursivo(nodo.izquierda, clave)
-        elif clave > nodo.evento.clave():
-            nodo.derecha = self._eliminar_recursivo(nodo.derecha, clave)
+        self.raiz = hijo
+
+        hijo.setPadre(None)
+
+      else:
+
+        # si el nodo es hijo izquierdo
+        if padre.getHijoIzquierdo() == nodo:
+
+          padre.setHijoIzquierdo(hijo)
+
         else:
-            if nodo.izquierda is None:
-                return nodo.derecha
-            if nodo.derecha is None:
-                return nodo.izquierda
 
-            sucesor = self._nodo_minimo(nodo.derecha)
-            nodo.evento = sucesor.evento
-            nodo.derecha = self._eliminar_recursivo(nodo.derecha, sucesor.evento.clave())
+          padre.setHijoDerecho(hijo)
 
-        return nodo
+        # el hijo ahora apunta al padre del nodo eliminado
+        hijo.setPadre(padre)
 
-    def _nodo_minimo(self, nodo):
-        actual = nodo
-        while actual.izquierda is not None:
-            actual = actual.izquierda
-        return actual
+      nodo.setPadre(None)
+      nodo.setHijoDerecho(None)
 
-    def altura(self):
-        return self._altura_recursiva(self.raiz)
+      return
 
-    def _altura_recursiva(self, nodo):
-        if nodo is None:
-            return -1
-        return max(self._altura_recursiva(nodo.izquierda), self._altura_recursiva(nodo.derecha)) + 1
 
-    def profundidad(self, evento):
-        return self.profundidad_por_clave(evento.clave())
+    # ------------------------------------------------
+    # CASO 2
+    # solamente tiene hijo izquierdo
+    # ------------------------------------------------
 
-    def profundidad_por_clave(self, clave):
-        return self._profundidad_recursiva(self.raiz, clave, 0)
+    if nodo.getHijoDerecho() is None:
 
-    def _profundidad_recursiva(self, nodo, clave, profundidad_actual):
-        if nodo is None:
-            return -1
+      hijo = nodo.getHijoIzquierdo()
+      padre = nodo.getPadre()
 
-        if clave == nodo.evento.clave():
-            return profundidad_actual
-        if clave < nodo.evento.clave():
-            return self._profundidad_recursiva(nodo.izquierda, clave, profundidad_actual + 1)
-        return self._profundidad_recursiva(nodo.derecha, clave, profundidad_actual + 1)
+      # si el nodo es la raíz
+      if padre is None:
 
-    def inorder(self):
-        eventos = []
-        self._inorder_recursivo(self.raiz, eventos)
-        return eventos
+        self.raiz = hijo
 
-    def _inorder_recursivo(self, nodo, eventos):
-        if nodo is not None:
-            self._inorder_recursivo(nodo.izquierda, eventos)
-            eventos.append(nodo.evento)
-            self._inorder_recursivo(nodo.derecha, eventos)
+        hijo.setPadre(None)
 
-    def preorder(self):
-        eventos = []
-        self._preorder_recursivo(self.raiz, eventos)
-        return eventos
+      else:
 
-    def _preorder_recursivo(self, nodo, eventos):
-        if nodo is not None:
-            eventos.append(nodo.evento)
-            self._preorder_recursivo(nodo.izquierda, eventos)
-            self._preorder_recursivo(nodo.derecha, eventos)
+        # si el nodo es hijo izquierdo
+        if padre.getHijoIzquierdo() == nodo:
 
-    def postorder(self):
-        eventos = []
-        self._postorder_recursivo(self.raiz, eventos)
-        return eventos
+          padre.setHijoIzquierdo(hijo)
 
-    def _postorder_recursivo(self, nodo, eventos):
-        if nodo is not None:
-            self._postorder_recursivo(nodo.izquierda, eventos)
-            self._postorder_recursivo(nodo.derecha, eventos)
-            eventos.append(nodo.evento)
+        else:
 
-    def cantidad_hojas(self):
-        return self._cantidad_hojas_recursiva(self.raiz)
+          padre.setHijoDerecho(hijo)
 
-    def _cantidad_hojas_recursiva(self, nodo):
-        if nodo is None:
-            return 0
-        if nodo.izquierda is None and nodo.derecha is None:
-            return 1
-        return self._cantidad_hojas_recursiva(nodo.izquierda) + self._cantidad_hojas_recursiva(nodo.derecha)
+        # el hijo ahora apunta al padre del nodo eliminado
+        hijo.setPadre(padre)
 
-    def factor_balance(self, nodo=None):
-        if nodo is None:
-            nodo = self.raiz
-        if nodo is None:
-            return 0
-        return self._altura_recursiva(nodo.izquierda) - self._altura_recursiva(nodo.derecha)
+      nodo.setPadre(None)
+      nodo.setHijoIzquierdo(None)
+
+      return
+
+
+    # ------------------------------------------------
+    # CASO 3
+    # el nodo tiene dos hijos
+    #
+    # se utiliza el PREDECESOR
+    # ------------------------------------------------
+
+    predecesor = self._getPredecesor(
+      nodo
+    )
+
+    # se copia el valor del predecesor
+    # en el nodo que se desea eliminar
+    nodo.setValor(
+      predecesor.getValor()
+    )
+
+    # se elimina físicamente el predecesor
+    self._eliminar(
+      predecesor
+    )
+
+
+  # --------------------------------------------------
+  # OBTENER PREDECESOR
+  #
+  # retorna el mayor nodo del subárbol izquierdo
+  # --------------------------------------------------
+
+  def _getPredecesor(self, nodo):
+
+    actual = nodo.getHijoIzquierdo()
+
+    while actual.getHijoDerecho() is not None:
+
+      actual = actual.getHijoDerecho()
+
+    return actual
+
+
+  # --------------------------------------------------
+  # DIBUJAR
+  # --------------------------------------------------
+
+  def dibujar(self):
+
+    if self.raiz is None:
+
+      print("El árbol está vacío")
+
+    else:
+
+      print("\nÁrbol BST:")
+      print("-----------")
+
+      self._dibujar(
+        self.raiz,
+        "",
+        "R"
+      )
+
+
+  # método para dibujar conceptualmente el árbol binario
+  def _dibujar(self, raizActual, espacio, posicion):
+
+    if raizActual is not None:
+
+      self._dibujar(
+        raizActual.getHijoDerecho(),
+        espacio + "     ",
+        "D"
+      )
+
+      print(
+        espacio +
+        posicion + "── " +
+        str(raizActual.getValor())
+      )
+
+      self._dibujar(
+        raizActual.getHijoIzquierdo(),
+        espacio + "     ",
+        "I"
+      )
