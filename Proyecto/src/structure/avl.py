@@ -1,5 +1,5 @@
-from src.estructuras.bst import BST
-from src.estructuras.nodo import Nodo
+from src.structure.bst import BST
+from structure.node import Nodo
 
 
 class AVL(BST):
