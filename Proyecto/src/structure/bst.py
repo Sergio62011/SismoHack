@@ -1,4 +1,4 @@
-from node import Node
+from structure.node import Node
 
 
 class BST:
@@ -18,7 +18,7 @@ class BST:
 
     def _insert(self, node, event):
 
-        if event.key() < node.event.key():
+        if event < node.event:
 
             if node.left is None:
                 node.left = Node(event)
@@ -26,13 +26,15 @@ class BST:
             else:
                 self._insert(node.left, event)
 
-        elif event.key() > node.event.key():
+        elif event > node.event:
 
             if node.right is None:
                 node.right = Node(event)
                 node.right.parent = node
             else:
                 self._insert(node.right, event)
+        else:
+            raise ValueError(f"Evento duplicado: ID {event.id_evento}")
 
     # =========================
     # SEARCH
@@ -422,3 +424,28 @@ class BST:
                 node.right.parent = node
 
         return node
+    
+    def dibujar(self):
+        """Dibuja el árbol en consola de forma horizontal (raíz a la izquierda)."""
+        if self.root is None:
+            print("El árbol está vacío")
+        else:
+            print("\nÁrbol BST:")
+            print("-----------")
+            self._dibujar(self.root, "", "R")
+
+    def _dibujar(self, node, espacio, posicion):
+        """Método auxiliar recursivo para dibujar el árbol."""
+        if node is not None:
+            # Primero el hijo derecho (va arriba)
+            self._dibujar(node.right, espacio + "     ", "D")
+
+            # Luego el nodo actual
+            print(
+                espacio +
+                posicion + "── " +
+                str(node.event.id_evento)
+            )
+
+            # Finalmente el hijo izquierdo (va abajo)
+            self._dibujar(node.left, espacio + "     ", "I")

@@ -15,6 +15,7 @@ class Evento:
         fecha_hora: datetime,
         revision: int = 1,
         estado: str = "pendiente",
+        zona_poblada: bool = False,
     ):
         # === Datos físicos (inmutables en identidad) ===
         self.id_evento = int(id_evento)
@@ -28,10 +29,10 @@ class Evento:
         self.revision = int(revision)
         self.estado = estado  # "pendiente" | "revisado"
         self.estaciones: Set[str] = set()  # ← NUEVO
+        self.en_zona_poblada = zona_poblada                 # ← NUEVO
         
         # === Datos derivados ===
         self.prioridad = self._calcular_prioridad()  # se recalcula
-        self.en_zona_poblada = False                 # ← NUEVO
         self.acceso_costoso = False                  # ← NUEVO
         
         # === Ubicación lógica ===
