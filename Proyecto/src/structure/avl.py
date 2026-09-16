@@ -1,110 +1,488 @@
-from src.structure.bst import BST
-from structure.node import Nodo
+from collections import deque
+from typing import Optional
+
+from node import Node
 
 
-class AVL(BST):
-    def insertar(self, evento):
-        self.raiz = self._insertar_avl(self.raiz, evento)
+class AVL:
 
-    def _insertar_avl(self, nodo, evento):
-        if nodo is None:
-            return Nodo(evento)
+    def __init__(self):
+        self.raiz = None
 
-        if evento.clave() < nodo.evento.clave():
-            nodo.izquierda = self._insertar_avl(nodo.izquierda, evento)
-        elif evento.clave() > nodo.evento.clave():
-            nodo.derecha = self._insertar_avl(nodo.derecha, evento)
-        else:
-            raise ValueError("No se permiten claves duplicadas en el arbol.")
 
-        self._actualizar_altura(nodo)
-        return self._balancear(nodo)
 
-    def eliminar(self, evento):
-        self.raiz = self._eliminar_avl(self.raiz, evento.clave())
-
-    def eliminar_por_clave(self, clave):
-        self.raiz = self._eliminar_avl(self.raiz, clave)
-
-    def _eliminar_avl(self, nodo, clave):
-        if nodo is None:
-            return None
-
-        if clave < nodo.evento.clave():
-            nodo.izquierda = self._eliminar_avl(nodo.izquierda, clave)
-        elif clave > nodo.evento.clave():
-            nodo.derecha = self._eliminar_avl(nodo.derecha, clave)
-        else:
-            if nodo.izquierda is None:
-                return nodo.derecha
-            if nodo.derecha is None:
-                return nodo.izquierda
-
-            sucesor = self._nodo_minimo(nodo.derecha)
-            nodo.evento = sucesor.evento
-            nodo.derecha = self._eliminar_avl(nodo.derecha, sucesor.evento.clave())
-
-        self._actualizar_altura(nodo)
-        return self._balancear(nodo)
-
-    def _altura_nodo(self, nodo):
-        if nodo is None:
-            return -1
-        return nodo.altura
-
-    def _actualizar_altura(self, nodo):
-        nodo.altura = max(self._altura_nodo(nodo.izquierda), self._altura_nodo(nodo.derecha)) + 1
-
-    def factor_balance(self, nodo=None):
-        if nodo is None:
-            nodo = self.raiz
+    def _obtener_altura(self, nodo: Optional[Node]) -> int:
         if nodo is None:
             return 0
-        return self._altura_nodo(nodo.izquierda) - self._altura_nodo(nodo.derecha)
+        return nodo.altura
 
-    def _balancear(self, nodo):
-        balance = self.factor_balance(nodo)
+    def _actualizar_altura(self, nodo: Node) -> None:
+        nodo.altura = 1 + max(
+            self._obtener_altura(nodo.izquierda),
+            self._obtener_altura(nodo.derecha)
+        )
 
-        if balance > 1:
-            if self.factor_balance(nodo.izquierda) < 0:
-                return self.rotacion_izquierda_derecha(nodo)
-            return self.rotacion_derecha(nodo)
 
-        if balance < -1:
-            if self.factor_balance(nodo.derecha) > 0:
-                return self.rotacion_derecha_izquierda(nodo)
-            return self.rotacion_izquierda(nodo)
+    def _factor_balance(self, nodo: Optional[Node]) -> int:
+        if nodo is None:
+            return 0
+
+        return (
+            self._obtener_altura(nodo.izquierda)
+            - self._obtener_altura(nodo.derecha)
+        )
+    
+
+    def _rotacion_derecha(self, y: Node) -> Node:
+
+        x = y.izquierda
+        temporal = x.derecha
+
+        x.derecha = y
+        y.izquierda = temporal
+
+        self._actualizar_altura(y)
+        self._actualizar_altura(x)
+
+        return x
+
+    def _rotacion_izquierda(self, x: Node) -> Node:
+
+        y = x.derecha
+        temporal = y.izquierda
+
+        y.izquierda = x
+        x.derecha = temporal
+
+        self._actualizar_altura(x)
+        self._actualizar_altura(y)
+
+        return y
+
+
+    def insertar(self, valor: int) -> None:
+        self.raiz = self._insertar(self.raiz, valor)
+
+    def _insertar(
+        self,
+        nodo: Optional[Node],
+        valor: int
+    ) -> Node:
+
+        if nodo is None:
+            return Node(valor)
+
+        if valor < nodo.valor:
+            nodo.izquierda = self._insertar(
+                nodo.izquierda,
+                valor
+            )
+
+        elif valor > nodo.valor:
+            nodo.derecha = self._insertar(
+                nodo.derecha,
+                valor
+            )
+
+        else:
+            return nodo
+
+        self._actualizar_altura(nodo)
+
+        balance = self._factor_balance(nodo)
+
+
+        if balance > 1 and valor < nodo.izquierda.valor:
+            return self._rotacion_derecha(nodo)
+
+
+        if balance < -1 and valor > nodo.derecha.valor:
+            return self._rotacion_izquierda(nodo)
+
+
+        if balance > 1 and valor > nodo.izquierda.valor:
+
+            nodo.izquierda = self._rotacion_izquierda(
+                nodo.izquierda
+            )
+
+            return self._rotacion_derecha(nodo)
+
+
+        if balance < -1 and valor < nodo.derecha.valor:
+
+            nodo.derecha = self._rotacion_derecha(
+                nodo.derecha
+            )
+
+            return self._rotacion_izquierda(nodo)
 
         return nodo
 
-    def rotacion_derecha(self, nodo):
-        nueva_raiz = nodo.izquierda
-        subarbol_temporal = nueva_raiz.derecha
 
-        nueva_raiz.derecha = nodo
-        nodo.izquierda = subarbol_temporal
+    def pre_order(self) -> None:
 
-        self._actualizar_altura(nodo)
-        self._actualizar_altura(nueva_raiz)
+        if self.raiz is None:
+            print("", end="")
+        else:
+            self._pre_order(self.raiz)
 
-        return nueva_raiz
+    def _pre_order(self, raiz: Optional[Node]) -> None:
 
-    def rotacion_izquierda(self, nodo):
-        nueva_raiz = nodo.derecha
-        subarbol_temporal = nueva_raiz.izquierda
+        if raiz is None:
+            return
 
-        nueva_raiz.izquierda = nodo
-        nodo.derecha = subarbol_temporal
+        print(raiz.valor, end=" ")
 
-        self._actualizar_altura(nodo)
-        self._actualizar_altura(nueva_raiz)
+        self._pre_order(raiz.izquierda)
+        self._pre_order(raiz.derecha)
 
-        return nueva_raiz
 
-    def rotacion_izquierda_derecha(self, nodo):
-        nodo.izquierda = self.rotacion_izquierda(nodo.izquierda)
-        return self.rotacion_derecha(nodo)
+    def in_order(self) -> None:
 
-    def rotacion_derecha_izquierda(self, nodo):
-        nodo.derecha = self.rotacion_derecha(nodo.derecha)
-        return self.rotacion_izquierda(nodo)
+        if self.raiz is None:
+            print("", end="")
+        else:
+            self._in_order(self.raiz)
+
+    def _in_order(self, raiz: Optional[Node]) -> None:
+
+        if raiz is None:
+            return
+
+        self._in_order(raiz.izquierda)
+
+        print(raiz.valor, end=" ")
+
+        self._in_order(raiz.derecha)
+
+
+    def post_order(self) -> None:
+
+        if self.raiz is None:
+            print("", end="")
+        else:
+            self._post_order(self.raiz)
+
+    def _post_order(self, raiz: Optional[Node]) -> None:
+
+        if raiz is None:
+            return
+
+        self._post_order(raiz.izquierda)
+        self._post_order(raiz.derecha)
+
+        print(raiz.valor, end=" ")
+
+
+    def anchura(self) -> None:
+
+        if self.raiz is None:
+            print("", end="")
+        else:
+            self._anchura(self.raiz)
+
+    def _anchura(self, raiz: Node) -> None:
+
+        cola = deque([raiz])
+
+        while cola:
+
+            nodo = cola.popleft()
+
+            print(nodo.valor, end=" ")
+
+            if nodo.izquierda is not None:
+                cola.append(nodo.izquierda)
+
+            if nodo.derecha is not None:
+                cola.append(nodo.derecha)
+
+
+
+    def _buscar_minimo(self, raiz: Node) -> Node:
+
+        actual = raiz
+
+        while actual.izquierda is not None:
+            actual = actual.izquierda
+
+        return actual
+
+
+    def eliminar(self, valor: int) -> None:
+        self.raiz = self._eliminar(
+            self.raiz,
+            valor
+        )
+
+    def _eliminar(
+        self,
+        raiz: Optional[Node],
+        valor: int
+    ) -> Optional[Node]:
+
+        if raiz is None:
+            return None
+
+
+        if valor < raiz.valor:
+
+            raiz.izquierda = self._eliminar(
+                raiz.izquierda,
+                valor
+            )
+
+        elif valor > raiz.valor:
+
+            raiz.derecha = self._eliminar(
+                raiz.derecha,
+                valor
+            )
+
+        else:
+
+            # Nodo hoja
+            if raiz.es_hoja():
+                return None
+
+            # Solo tiene hijo derecho
+            if raiz.izquierda is None:
+                return raiz.derecha
+
+            # Solo tiene hijo izquierdo
+            if raiz.derecha is None:
+                return raiz.izquierda
+
+            # Tiene dos hijos
+            sucesor = self._buscar_minimo(
+                raiz.derecha
+            )
+
+            raiz.valor = sucesor.valor
+
+            raiz.derecha = self._eliminar(
+                raiz.derecha,
+                sucesor.valor
+            )
+
+
+        self._actualizar_altura(raiz)
+
+
+        balance = self._factor_balance(raiz)
+
+
+        if (
+            balance > 1
+            and self._factor_balance(raiz.izquierda) >= 0
+        ):
+            return self._rotacion_derecha(raiz)
+
+
+        if (
+            balance > 1
+            and self._factor_balance(raiz.izquierda) < 0
+        ):
+
+            raiz.izquierda = self._rotacion_izquierda(
+                raiz.izquierda
+            )
+
+            return self._rotacion_derecha(raiz)
+
+
+        if (
+            balance < -1
+            and self._factor_balance(raiz.derecha) <= 0
+        ):
+            return self._rotacion_izquierda(raiz)
+
+
+        if (
+            balance < -1
+            and self._factor_balance(raiz.derecha) > 0
+        ):
+
+            raiz.derecha = self._rotacion_derecha(
+                raiz.derecha
+            )
+
+            return self._rotacion_izquierda(raiz)
+
+        return raiz
+
+
+    def altura(self) -> int:
+
+        if self.raiz is None:
+            return -1
+
+        return self._altura(self.raiz)
+
+    def _altura(
+        self,
+        nodo: Optional[Node]
+    ) -> int:
+
+        if nodo is None:
+            return -1
+
+        return 1 + max(
+            self._altura(nodo.izquierda),
+            self._altura(nodo.derecha)
+        )
+
+
+    def peso(self) -> int:
+
+        if self.raiz is None:
+            return 0
+
+        return self._peso(self.raiz)
+
+    def _peso(
+        self,
+        nodo: Optional[Node]
+    ) -> int:
+
+        if nodo is None:
+            return 0
+
+        return (
+            1
+            + self._peso(nodo.izquierda)
+            + self._peso(nodo.derecha)
+        )
+
+
+    def recorrido_por_ramas(self) -> None:
+
+        if self.raiz is None:
+            print("El árbol está vacío.")
+            return
+
+        print("Caminos por ramas:")
+
+        self._recorrido_por_ramas(
+            self.raiz,
+            []
+        )
+#backtracking
+    def _recorrido_por_ramas(
+        self,
+        nodo: Node,
+        camino: list
+    ) -> None:
+
+        camino.append(nodo.valor)
+
+        if nodo.es_hoja():
+
+            print(
+                " -> ".join(
+                    map(str, camino)
+                )
+            )
+
+        else:
+
+            if nodo.izquierda is not None:
+
+                self._recorrido_por_ramas(
+                    nodo.izquierda,
+                    camino.copy()
+                )
+
+            if nodo.derecha is not None:
+
+                self._recorrido_por_ramas(
+                    nodo.derecha,
+                    camino.copy()
+                )
+
+
+    def nivel_de_un_nodo(
+        self,
+        valor: int
+    ) -> int:
+
+        if self.raiz is None:
+            return -1
+
+        return self._nivel_de_un_nodo(
+            self.raiz,
+            valor,
+            0
+        )
+
+    def _nivel_de_un_nodo(
+        self,
+        nodo: Optional[Node],
+        valor: int,
+        nivel_actual: int
+    ) -> int:
+
+        if nodo is None:
+            return -1
+
+        if nodo.valor == valor:
+            return nivel_actual
+
+        if valor < nodo.valor:
+
+            return self._nivel_de_un_nodo(
+                nodo.izquierda,
+                valor,
+                nivel_actual + 1
+            )
+
+        else:
+
+            return self._nivel_de_un_nodo(
+                nodo.derecha,
+                valor,
+                nivel_actual + 1
+            )
+
+
+    def cantidad_de_nodos_por_nivel(self) -> dict:
+
+        if self.raiz is None:
+            return {}
+
+        conteo = {}
+
+        self._cantidad_de_nodos_por_nivel(
+            self.raiz,
+            0,
+            conteo
+        )
+
+        return conteo
+
+    def _cantidad_de_nodos_por_nivel(
+        self,
+        nodo: Optional[Node],
+        nivel: int,
+        conteo: dict
+    ) -> None:
+
+        if nodo is None:
+            return
+
+        conteo[nivel] = (
+            conteo.get(nivel, 0) + 1
+        )
+
+        self._cantidad_de_nodos_por_nivel(
+            nodo.izquierda,
+            nivel + 1,
+            conteo
+        )
+
+        self._cantidad_de_nodos_por_nivel(
+            nodo.derecha,
+            nivel + 1,
+            conteo
+        )
