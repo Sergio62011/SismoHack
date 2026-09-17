@@ -48,10 +48,10 @@ class BST:
         if node is None:
             return None
 
-        if key == node.event.key():
+        if key == node.event.calcular_clave():
             return node
 
-        if key < node.event.key():
+        if key < node.event.calcular_clave():
             return self._search(node.left, key)
 
         return self._search(node.right, key)
@@ -218,10 +218,10 @@ class BST:
         if node is None:
             return -1
 
-        if key == node.event.key():
+        if key == node.event.calcular_clave():
             return level
 
-        if key < node.event.key():
+        if key < node.event.calcular_clave():
             return self._node_level(
                 node.left,
                 key,
@@ -374,7 +374,7 @@ class BST:
         if node is None:
             return None
 
-        if key < node.event.key():
+        if key < node.event.calcular_clave():
 
             node.left = self._delete(
                 node.left,
@@ -384,7 +384,7 @@ class BST:
             if node.left is not None:
                 node.left.parent = node
 
-        elif key > node.event.key():
+        elif key > node.event.calcular_clave():
 
             node.right = self._delete(
                 node.right,
@@ -417,7 +417,7 @@ class BST:
 
             node.right = self._delete(
                 node.right,
-                successor.event.key()
+                successor.event.calcular_clave()
             )
 
             if node.right is not None:

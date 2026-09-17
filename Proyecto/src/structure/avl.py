@@ -1,488 +1,584 @@
-from collections import deque
-from typing import Optional
-
-from node import Node
+# structure/avl.py
+from structure.node import Node
 
 
 class AVL:
 
     def __init__(self):
-        self.raiz = None
+        self.root = None
+        self.modo_estres = False
+        self.rotaciones_realizadas = 0
 
+    # =========================================================
+    # INSERT
+    # =========================================================
 
+    def insert(self, event):
+        if self.root is None:
+            self.root = Node(event)
+        else:
+            self.root = self._insert(self.root, event)
+            self.root.parent = None
 
-    def _obtener_altura(self, nodo: Optional[Node]) -> int:
-        if nodo is None:
-            return 0
-        return nodo.altura
+    def _insert(self, node, event):
+        """Inserta recursivamente. Retorna la nueva raíz del subárbol."""
 
-    def _actualizar_altura(self, nodo: Node) -> None:
-        nodo.altura = 1 + max(
-            self._obtener_altura(nodo.izquierda),
-            self._obtener_altura(nodo.derecha)
-        )
+        # Caso base: llegamos a un lugar vacío
+        if node is None:
+            return Node(event)
 
+        # Comparación por clave K = (P, M, I)
+        if event < node.event:
 
-    def _factor_balance(self, nodo: Optional[Node]) -> int:
-        if nodo is None:
-            return 0
+            node.left = self._insert(node.left, event)
+            if node.left is not None:
+                node.left.parent = node
 
-        return (
-            self._obtener_altura(nodo.izquierda)
-            - self._obtener_altura(nodo.derecha)
-        )
-    
+        elif event > node.event:
 
-    def _rotacion_derecha(self, y: Node) -> Node:
+            node.right = self._insert(node.right, event)
+            if node.right is not None:
+                node.right.parent = node
 
-        x = y.izquierda
-        temporal = x.derecha
+        else:
+            raise ValueError(f"Evento duplicado: ID {event.id_evento}")
 
-        x.derecha = y
-        y.izquierda = temporal
+        # Actualizar altura del nodo actual
+        node.update_height()
 
-        self._actualizar_altura(y)
-        self._actualizar_altura(x)
+        # Si estamos en modo estrés, NO balancear
+        if self.modo_estres:
+            return node
 
-        return x
+        # Balancear y retornar la nueva raíz del subárbol
+        return self._balance(node)
 
-    def _rotacion_izquierda(self, x: Node) -> Node:
+    # =========================================================
+    # BALANCE (rotaciones)
+    # =========================================================
 
-        y = x.derecha
-        temporal = y.izquierda
+    def _balance(self, node):
+        """Verifica el factor de balance y aplica rotaciones si hace falta."""
 
-        y.izquierda = x
-        x.derecha = temporal
+        fb = node.balance_factor
 
-        self._actualizar_altura(x)
-        self._actualizar_altura(y)
+        # Caso LL: rotación simple a la derecha
+        if fb > 1 and node.left.balance_factor >= 0:
+            return self._rotate_right(node)
 
+        # Caso LR: rotación doble izquierda-derecha
+        if fb > 1 and node.left.balance_factor < 0:
+            node.left = self._rotate_left(node.left)
+            if node.left is not None:
+                node.left.parent = node
+            return self._rotate_right(node)
+
+        # Caso RR: rotación simple a la izquierda
+        if fb < -1 and node.right.balance_factor <= 0:
+            return self._rotate_left(node)
+
+        # Caso RL: rotación doble derecha-izquierda
+        if fb < -1 and node.right.balance_factor > 0:
+            node.right = self._rotate_right(node.right)
+            if node.right is not None:
+                node.right.parent = node
+            return self._rotate_left(node)
+
+        # Ya está balanceado
+        return node
+
+    # =========================================================
+    # ROTACIONES
+    # =========================================================
+
+    def _rotate_right(self, z):
+        """
+              z                y
+             / \              / \
+            y   T4    →      x   z
+           / \              / \ / \
+          x   T3           T1 T2 T3 T4
+         / \
+        T1  T2
+        """
+        y = z.left
+        T3 = y.right
+
+        # Rotación
+        y.right = z
+        z.left = T3
+
+        # Actualizar padres
+        y.parent = z.parent
+        z.parent = y
+        if T3 is not None:
+            T3.parent = z
+
+        # Actualizar alturas (primero z, luego y)
+        z.update_height()
+        y.update_height()
+
+        self.rotaciones_realizadas += 1
         return y
 
+    def _rotate_left(self, z):
+        """
+            z                    y
+           / \                  / \
+          T1  y        →       z   x
+             / \              / \ / \
+            T2  x            T1 T2 T3 T4
+               / \
+              T3  T4
+        """
+        y = z.right
+        T2 = y.left
 
-    def insertar(self, valor: int) -> None:
-        self.raiz = self._insertar(self.raiz, valor)
+        # Rotación
+        y.left = z
+        z.right = T2
 
-    def _insertar(
-        self,
-        nodo: Optional[Node],
-        valor: int
-    ) -> Node:
+        # Actualizar padres
+        y.parent = z.parent
+        z.parent = y
+        if T2 is not None:
+            T2.parent = z
 
-        if nodo is None:
-            return Node(valor)
+        # Actualizar alturas
+        z.update_height()
+        y.update_height()
 
-        if valor < nodo.valor:
-            nodo.izquierda = self._insertar(
-                nodo.izquierda,
-                valor
-            )
+        self.rotaciones_realizadas += 1
+        return y
 
-        elif valor > nodo.valor:
-            nodo.derecha = self._insertar(
-                nodo.derecha,
-                valor
-            )
+    # =========================================================
+    # SEARCH
+    # =========================================================
 
-        else:
-            return nodo
+    def search(self, key):
+        return self._search(self.root, key)
 
-        self._actualizar_altura(nodo)
+    def _search(self, node, key):
 
-        balance = self._factor_balance(nodo)
-
-
-        if balance > 1 and valor < nodo.izquierda.valor:
-            return self._rotacion_derecha(nodo)
-
-
-        if balance < -1 and valor > nodo.derecha.valor:
-            return self._rotacion_izquierda(nodo)
-
-
-        if balance > 1 and valor > nodo.izquierda.valor:
-
-            nodo.izquierda = self._rotacion_izquierda(
-                nodo.izquierda
-            )
-
-            return self._rotacion_derecha(nodo)
-
-
-        if balance < -1 and valor < nodo.derecha.valor:
-
-            nodo.derecha = self._rotacion_derecha(
-                nodo.derecha
-            )
-
-            return self._rotacion_izquierda(nodo)
-
-        return nodo
-
-
-    def pre_order(self) -> None:
-
-        if self.raiz is None:
-            print("", end="")
-        else:
-            self._pre_order(self.raiz)
-
-    def _pre_order(self, raiz: Optional[Node]) -> None:
-
-        if raiz is None:
-            return
-
-        print(raiz.valor, end=" ")
-
-        self._pre_order(raiz.izquierda)
-        self._pre_order(raiz.derecha)
-
-
-    def in_order(self) -> None:
-
-        if self.raiz is None:
-            print("", end="")
-        else:
-            self._in_order(self.raiz)
-
-    def _in_order(self, raiz: Optional[Node]) -> None:
-
-        if raiz is None:
-            return
-
-        self._in_order(raiz.izquierda)
-
-        print(raiz.valor, end=" ")
-
-        self._in_order(raiz.derecha)
-
-
-    def post_order(self) -> None:
-
-        if self.raiz is None:
-            print("", end="")
-        else:
-            self._post_order(self.raiz)
-
-    def _post_order(self, raiz: Optional[Node]) -> None:
-
-        if raiz is None:
-            return
-
-        self._post_order(raiz.izquierda)
-        self._post_order(raiz.derecha)
-
-        print(raiz.valor, end=" ")
-
-
-    def anchura(self) -> None:
-
-        if self.raiz is None:
-            print("", end="")
-        else:
-            self._anchura(self.raiz)
-
-    def _anchura(self, raiz: Node) -> None:
-
-        cola = deque([raiz])
-
-        while cola:
-
-            nodo = cola.popleft()
-
-            print(nodo.valor, end=" ")
-
-            if nodo.izquierda is not None:
-                cola.append(nodo.izquierda)
-
-            if nodo.derecha is not None:
-                cola.append(nodo.derecha)
-
-
-
-    def _buscar_minimo(self, raiz: Node) -> Node:
-
-        actual = raiz
-
-        while actual.izquierda is not None:
-            actual = actual.izquierda
-
-        return actual
-
-
-    def eliminar(self, valor: int) -> None:
-        self.raiz = self._eliminar(
-            self.raiz,
-            valor
-        )
-
-    def _eliminar(
-        self,
-        raiz: Optional[Node],
-        valor: int
-    ) -> Optional[Node]:
-
-        if raiz is None:
+        if node is None:
             return None
 
+        node_key = node.event.calcular_clave()
 
-        if valor < raiz.valor:
+        if key == node_key:
+            return node
 
-            raiz.izquierda = self._eliminar(
-                raiz.izquierda,
-                valor
-            )
+        if key < node_key:
+            return self._search(node.left, key)
 
-        elif valor > raiz.valor:
+        return self._search(node.right, key)
 
-            raiz.derecha = self._eliminar(
-                raiz.derecha,
-                valor
-            )
+    # =========================================================
+    # PREORDER
+    # =========================================================
 
-        else:
+    def pre_order(self):
+        result = []
+        self._pre_order(self.root, result)
+        return result
 
-            # Nodo hoja
-            if raiz.es_hoja():
-                return None
+    def _pre_order(self, node, result):
 
-            # Solo tiene hijo derecho
-            if raiz.izquierda is None:
-                return raiz.derecha
+        if node is not None:
+            result.append(node.event)
+            self._pre_order(node.left, result)
+            self._pre_order(node.right, result)
 
-            # Solo tiene hijo izquierdo
-            if raiz.derecha is None:
-                return raiz.izquierda
+    # =========================================================
+    # INORDER
+    # =========================================================
 
-            # Tiene dos hijos
-            sucesor = self._buscar_minimo(
-                raiz.derecha
-            )
+    def in_order(self):
+        result = []
+        self._in_order(self.root, result)
+        return result
 
-            raiz.valor = sucesor.valor
+    def _in_order(self, node, result):
 
-            raiz.derecha = self._eliminar(
-                raiz.derecha,
-                sucesor.valor
-            )
+        if node is not None:
+            self._in_order(node.left, result)
+            result.append(node.event)
+            self._in_order(node.right, result)
 
+    # =========================================================
+    # POSTORDER
+    # =========================================================
 
-        self._actualizar_altura(raiz)
+    def post_order(self):
+        result = []
+        self._post_order(self.root, result)
+        return result
 
+    def _post_order(self, node, result):
 
-        balance = self._factor_balance(raiz)
+        if node is not None:
+            self._post_order(node.left, result)
+            self._post_order(node.right, result)
+            result.append(node.event)
 
+    # =========================================================
+    # LEVEL ORDER / BFS
+    # =========================================================
 
-        if (
-            balance > 1
-            and self._factor_balance(raiz.izquierda) >= 0
-        ):
-            return self._rotacion_derecha(raiz)
+    def breadth_first(self):
 
+        if self.root is None:
+            return []
 
-        if (
-            balance > 1
-            and self._factor_balance(raiz.izquierda) < 0
-        ):
+        queue = [self.root]
+        result = []
 
-            raiz.izquierda = self._rotacion_izquierda(
-                raiz.izquierda
-            )
+        while len(queue) > 0:
 
-            return self._rotacion_derecha(raiz)
+            node = queue.pop(0)
+            result.append(node.event)
 
+            if node.left is not None:
+                queue.append(node.left)
 
-        if (
-            balance < -1
-            and self._factor_balance(raiz.derecha) <= 0
-        ):
-            return self._rotacion_izquierda(raiz)
+            if node.right is not None:
+                queue.append(node.right)
 
+        return result
 
-        if (
-            balance < -1
-            and self._factor_balance(raiz.derecha) > 0
-        ):
+    # =========================================================
+    # HEIGHT
+    # =========================================================
 
-            raiz.derecha = self._rotacion_derecha(
-                raiz.derecha
-            )
+    def height(self):
+        return self.root.height if self.root else -1
 
-            return self._rotacion_izquierda(raiz)
+    # =========================================================
+    # UPDATE HEIGHTS (recalcula todo el árbol)
+    # =========================================================
 
-        return raiz
+    def update_heights(self):
+        self._update_heights(self.root)
 
+    def _update_heights(self, node):
 
-    def altura(self) -> int:
-
-        if self.raiz is None:
+        if node is None:
             return -1
 
-        return self._altura(self.raiz)
+        left_height = self._update_heights(node.left)
+        right_height = self._update_heights(node.right)
 
-    def _altura(
-        self,
-        nodo: Optional[Node]
-    ) -> int:
+        node.height = 1 + max(left_height, right_height)
 
-        if nodo is None:
-            return -1
+        return node.height
 
-        return 1 + max(
-            self._altura(nodo.izquierda),
-            self._altura(nodo.derecha)
-        )
+    # =========================================================
+    # SIZE / NUMBER OF NODES
+    # =========================================================
 
+    def size(self):
+        return self._size(self.root)
 
-    def peso(self) -> int:
+    def _size(self, node):
 
-        if self.raiz is None:
+        if node is None:
             return 0
 
-        return self._peso(self.raiz)
+        return 1 + self._size(node.left) + self._size(node.right)
 
-    def _peso(
-        self,
-        nodo: Optional[Node]
-    ) -> int:
+    # =========================================================
+    # NUMBER OF LEAVES
+    # =========================================================
 
-        if nodo is None:
+    def number_of_leaves(self):
+        return self._number_of_leaves(self.root)
+
+    def _number_of_leaves(self, node):
+
+        if node is None:
             return 0
+
+        if node.is_leaf():
+            return 1
 
         return (
-            1
-            + self._peso(nodo.izquierda)
-            + self._peso(nodo.derecha)
+            self._number_of_leaves(node.left)
+            + self._number_of_leaves(node.right)
         )
 
+    # =========================================================
+    # NODE LEVEL
+    # =========================================================
 
-    def recorrido_por_ramas(self) -> None:
+    def node_level(self, key):
+        return self._node_level(self.root, key, 0)
 
-        if self.raiz is None:
-            print("El árbol está vacío.")
+    def _node_level(self, node, key, level):
+
+        if node is None:
+            return -1
+
+        node_key = node.event.calcular_clave()
+
+        if key == node_key:
+            return level
+
+        if key < node_key:
+            return self._node_level(node.left, key, level + 1)
+
+        return self._node_level(node.right, key, level + 1)
+
+    # =========================================================
+    # NODES PER LEVEL
+    # =========================================================
+
+    def nodes_per_level(self):
+
+        result = {}
+
+        self._nodes_per_level(self.root, 0, result)
+
+        return result
+
+    def _nodes_per_level(self, node, level, result):
+
+        if node is None:
             return
 
-        print("Caminos por ramas:")
+        if level not in result:
+            result[level] = 0
 
-        self._recorrido_por_ramas(
-            self.raiz,
-            []
-        )
-#backtracking
-    def _recorrido_por_ramas(
-        self,
-        nodo: Node,
-        camino: list
-    ) -> None:
+        result[level] += 1
 
-        camino.append(nodo.valor)
+        self._nodes_per_level(node.left, level + 1, result)
+        self._nodes_per_level(node.right, level + 1, result)
 
-        if nodo.es_hoja():
+    # =========================================================
+    # ROOT-TO-LEAF PATHS
+    # =========================================================
 
-            print(
-                " -> ".join(
-                    map(str, camino)
-                )
-            )
+    def root_to_leaf_paths(self):
+
+        result = []
+
+        self._root_to_leaf_paths(self.root, [], result)
+
+        return result
+
+    def _root_to_leaf_paths(self, node, path, result):
+
+        if node is None:
+            return
+
+        path.append(node.event)
+
+        if node.left is None and node.right is None:
+            result.append(path.copy())
 
         else:
 
-            if nodo.izquierda is not None:
+            self._root_to_leaf_paths(node.left, path, result)
+            self._root_to_leaf_paths(node.right, path, result)
 
-                self._recorrido_por_ramas(
-                    nodo.izquierda,
-                    camino.copy()
-                )
+        path.pop()
 
-            if nodo.derecha is not None:
+    # =========================================================
+    # BALANCE FACTOR
+    # =========================================================
 
-                self._recorrido_por_ramas(
-                    nodo.derecha,
-                    camino.copy()
-                )
+    def balance_factor(self, node):
 
+        if node is None:
+            return 0
 
-    def nivel_de_un_nodo(
-        self,
-        valor: int
-    ) -> int:
+        return node.balance_factor
 
-        if self.raiz is None:
-            return -1
+    # =========================================================
+    # MINIMUM
+    # =========================================================
 
-        return self._nivel_de_un_nodo(
-            self.raiz,
-            valor,
-            0
-        )
+    def find_minimum(self, node):
 
-    def _nivel_de_un_nodo(
-        self,
-        nodo: Optional[Node],
-        valor: int,
-        nivel_actual: int
-    ) -> int:
+        current = node
 
-        if nodo is None:
-            return -1
+        while current.left is not None:
+            current = current.left
 
-        if nodo.valor == valor:
-            return nivel_actual
+        return current
 
-        if valor < nodo.valor:
+    # =========================================================
+    # MAXIMUM
+    # =========================================================
 
-            return self._nivel_de_un_nodo(
-                nodo.izquierda,
-                valor,
-                nivel_actual + 1
-            )
+    def find_maximum(self, node):
+
+        current = node
+
+        while current.right is not None:
+            current = current.right
+
+        return current
+
+    # =========================================================
+    # DELETE
+    # =========================================================
+
+    def delete(self, key):
+        self.root = self._delete(self.root, key)
+
+        if self.root is not None:
+            self.root.parent = None
+
+    def _delete(self, node, key):
+
+        if node is None:
+            return None
+
+        node_key = node.event.calcular_clave()
+
+        if key < node_key:
+
+            node.left = self._delete(node.left, key)
+
+            if node.left is not None:
+                node.left.parent = node
+
+        elif key > node_key:
+
+            node.right = self._delete(node.right, key)
+
+            if node.right is not None:
+                node.right.parent = node
 
         else:
 
-            return self._nivel_de_un_nodo(
-                nodo.derecha,
-                valor,
-                nivel_actual + 1
+            # Case 1: leaf
+            if node.left is None and node.right is None:
+                return None
+
+            # Case 2: only right child
+            if node.left is None:
+                node.right.parent = node.parent
+                return node.right
+
+            # Case 3: only left child
+            if node.right is None:
+                node.left.parent = node.parent
+                return node.left
+
+            # Case 4: two children
+            successor = self.find_minimum(node.right)
+
+            node.event = successor.event
+
+            node.right = self._delete(
+                node.right,
+                successor.event.calcular_clave()
             )
 
+            if node.right is not None:
+                node.right.parent = node
 
-    def cantidad_de_nodos_por_nivel(self) -> dict:
+        # Actualizar altura
+        node.update_height()
 
-        if self.raiz is None:
-            return {}
+        # Balancear (a menos que estemos en estrés)
+        if self.modo_estres:
+            return node
 
-        conteo = {}
+        return self._balance(node)
 
-        self._cantidad_de_nodos_por_nivel(
-            self.raiz,
-            0,
-            conteo
-        )
+    # =========================================================
+    # MODO ESTRÉS
+    # =========================================================
 
-        return conteo
+    def activar_modo_estres(self):
+        """Activa el modo estrés: no se aplican rotaciones."""
+        self.modo_estres = True
+        print("⚠️  Modo estrés activado: NO se aplicarán rotaciones.")
 
-    def _cantidad_de_nodos_por_nivel(
-        self,
-        nodo: Optional[Node],
-        nivel: int,
-        conteo: dict
-    ) -> None:
+    def desactivar_modo_estres(self):
+        """Desactiva el modo estrés."""
+        self.modo_estres = False
+        print("✅ Modo estrés desactivado.")
 
-        if nodo is None:
+    # =========================================================
+    # RECUPERACIÓN GLOBAL
+    # =========================================================
+
+    def recuperar_balance(self):
+        """
+        Recuperación global: aplica rotaciones bottom-up
+        hasta que todo el árbol cumpla la propiedad AVL.
+        """
+        if self.root is None:
             return
 
-        conteo[nivel] = (
-            conteo.get(nivel, 0) + 1
-        )
+        # Desactivamos estrés temporalmente
+        modo_previo = self.modo_estres
+        self.modo_estres = False
 
-        self._cantidad_de_nodos_por_nivel(
-            nodo.izquierda,
-            nivel + 1,
-            conteo
-        )
+        # Recorrido post-orden: rebalancea desde las hojas hacia arriba
+        self.root = self._recuperar(self.root)
+        self.root.parent = None
 
-        self._cantidad_de_nodos_por_nivel(
-            nodo.derecha,
-            nivel + 1,
-            conteo
-        )
+        # Restaurar modo
+        self.modo_estres = modo_previo
+
+    def _recuperar(self, node):
+        """Recorre post-orden y rebalancea cada nodo."""
+        if node is None:
+            return None
+
+        # Primero rebalancear los hijos
+        node.left = self._recuperar(node.left)
+        if node.left is not None:
+            node.left.parent = node
+
+        node.right = self._recuperar(node.right)
+        if node.right is not None:
+            node.right.parent = node
+
+        # Actualizar altura y balancear
+        node.update_height()
+        return self._balance(node)
+
+    # =========================================================
+    # DIBUJAR
+    # =========================================================
+
+    def dibujar(self, mostrar_info=False):
+        """
+        Dibuja el árbol en consola de forma horizontal.
+
+        Args:
+            mostrar_info: Si True, muestra altura y factor de balance.
+        """
+        if self.root is None:
+            print("El árbol está vacío")
+        else:
+            modo = "ESTRÉS" if self.modo_estres else "NORMAL"
+            print(f"\nÁrbol AVL [{modo}]:")
+            print("-----------")
+            self._dibujar(self.root, "", "R", mostrar_info)
+
+    def _dibujar(self, node, espacio, posicion, mostrar_info):
+
+        if node is not None:
+
+            # Primero el hijo derecho
+            self._dibujar(node.right, espacio + "     ", "D", mostrar_info)
+
+            # Etiqueta del nodo
+            if mostrar_info:
+                etiqueta = (
+                    f"{node.event.id_evento} "
+                    f"(h={node.height}, fb={node.balance_factor})"
+                )
+            else:
+                etiqueta = str(node.event.id_evento)
+
+            print(espacio + posicion + "── " + etiqueta)
+
+            # Finalmente el hijo izquierdo
+            self._dibujar(node.left, espacio + "     ", "I", mostrar_info)
