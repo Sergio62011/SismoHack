@@ -2,6 +2,45 @@ from datetime import datetime
 from structure.avl import AVL
 from structure.bst import BST
 from models.event import Evento
+from models.map import MapaSismico, Zona
+
+
+def demo_mapa_y_zonas():
+    print("=" * 60)
+    print("MAPA Y ZONAS")
+    print("=" * 60)
+
+    mapa = MapaSismico(filas=10, columnas=10)
+
+    mapa.agregar_zona(Zona("Ciudad Norte", 100, 600, 450, 900, True))
+    mapa.agregar_zona(Zona("Reserva Sur", 550, 100, 900, 350, False))
+    mapa.agregar_zona(Zona("Ciudad Centro", 250, 250, 550, 550, True))
+
+    eventos = [
+        Evento(id_evento=101, magnitud=4.7, profundidad=20.0,
+               x=300.0, y=700.0,
+               fecha_hora=datetime(2026, 9, 7, 10, 0, 0)),
+        Evento(id_evento=102, magnitud=5.1, profundidad=40.0,
+               x=700.0, y=200.0,
+               fecha_hora=datetime(2026, 9, 7, 11, 0, 0)),
+        Evento(id_evento=103, magnitud=6.2, profundidad=15.0,
+               x=500.0, y=500.0,
+               fecha_hora=datetime(2026, 9, 7, 12, 0, 0)),
+    ]
+
+    for evento in eventos:
+        mapa.asignar_zona_a_evento(evento)
+        print(
+            f"Evento {evento.id_evento}: "
+            f"zona_poblada={evento.en_zona_poblada}, "
+            f"prioridad={evento.prioridad}, "
+            f"clave={evento.calcular_clave()}"
+        )
+
+    print()
+    matriz = mapa.crear_matriz_con_eventos(eventos)
+    mapa.imprimir_matriz(matriz)
+    print()
 
 
 def crear_eventos():
@@ -31,6 +70,9 @@ def crear_eventos():
                fecha_hora=datetime(2026, 9, 7, 15, 0, 0),
                zona_poblada=True),
     ]
+
+
+demo_mapa_y_zonas()
 
 
 # ============================================
