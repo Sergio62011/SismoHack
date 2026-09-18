@@ -49,6 +49,10 @@ def crear_eventos():
                x=200.0, y=300.0,
                fecha_hora=datetime(2026, 9, 7, 10, 0, 0),
                zona_poblada=True),
+        Evento(id_evento=12, magnitud=5.3, profundidad=10.0,
+                       x=200.0, y=300.0,
+                       fecha_hora=datetime(2026, 9, 7, 10, 0, 0),
+                       zona_poblada=True),
         Evento(id_evento=20, magnitud=6.5, profundidad=15.0,
                x=500.0, y=500.0,
                fecha_hora=datetime(2026, 9, 7, 11, 0, 0),
@@ -157,7 +161,7 @@ avl_estres = AVL()
 avl_estres.activar_modo_estres()
 
 # Insertar en orden → degenera en lista
-for id_ev in [10, 20, 30, 40, 50, 60]:
+for id_ev in [10, 12, 9, 20, 30, 40, 50, 60]:
     avl_estres.insert(crear_evento(id_ev))
 
 print("\n--- AVL en modo ESTRÉS (sin rotaciones) ---")

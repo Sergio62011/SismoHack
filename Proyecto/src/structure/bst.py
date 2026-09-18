@@ -11,10 +11,33 @@ class BST:
     # =========================
 
     def insert(self, event):
+        # The identifier is the earthquake identity, not merely a component
+        # of its key. It cannot appear twice even after a key change.
+        if self._find_by_id(self.root, event.id_evento) is not None:
+            raise ValueError(f"Evento duplicado: ID {event.id_evento}")
+
         if self.root is None:
             self.root = Node(event)
         else:
             self._insert(self.root, event)
+
+    def _find_by_id(self, node, event_id):
+        """Searches an identity across the whole tree.
+
+        The BST is ordered by (priority, magnitude, identifier), so an ID
+        alone cannot determine which branch to search.
+        """
+        if node is None:
+            return None
+
+        if node.event.id_evento == event_id:
+            return node
+
+        found = self._find_by_id(node.left, event_id)
+        if found is not None:
+            return found
+
+        return self._find_by_id(node.right, event_id)
 
     def _insert(self, node, event):
 
@@ -35,7 +58,6 @@ class BST:
                 self._insert(node.right, event)
         else:
             raise ValueError(f"Evento duplicado: ID {event.id_evento}")
-
     # =========================
     # SEARCH
     # =========================

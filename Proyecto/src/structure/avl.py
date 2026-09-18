@@ -14,11 +14,34 @@ class AVL:
     # =========================================================
 
     def insert(self, event):
+        # The identifier is the earthquake identity, not merely a component
+        # of its key. It cannot appear twice even after a key change.
+        if self._find_by_id(self.root, event.id_evento) is not None:
+            raise ValueError(f"Evento duplicado: ID {event.id_evento}")
+
         if self.root is None:
             self.root = Node(event)
         else:
             self.root = self._insert(self.root, event)
             self.root.parent = None
+
+    def _find_by_id(self, node, event_id):
+        """Searches an identity across the whole tree.
+
+        The AVL is ordered by (priority, magnitude, identifier), so an ID
+        alone cannot determine which branch to search.
+        """
+        if node is None:
+            return None
+
+        if node.event.id_evento == event_id:
+            return node
+
+        found = self._find_by_id(node.left, event_id)
+        if found is not None:
+            return found
+
+        return self._find_by_id(node.right, event_id)
 
     def _insert(self, node, event):
         """Inserta recursivamente. Retorna la nueva raíz del subárbol."""
@@ -514,16 +537,31 @@ class AVL:
         if self.root is None:
             return
 
-        # Desactivamos estrés temporalmente
-        modo_previo = self.modo_estres
+        # Disable stress mode so the required rotations can occur.
         self.modo_estres = False
 
-        # Recorrido post-orden: rebalancea desde las hojas hacia arriba
-        self.root = self._recuperar(self.root)
-        self.root.parent = None
+        # A degraded tree can have height differences greater than 2. One
+        # postorder pass is not always enough, so repeat until it is AVL.
+        while True:
+            self.root = self._recuperar(self.root)
+            self.root.parent = None
 
-        # Restaurar modo
-        self.modo_estres = modo_previo
+            if self._esta_balanceado(self.root):
+                break
+
+        # A completed global recovery returns the tree to normal mode.
+        self.modo_estres = False
+
+    def _esta_balanceado(self, node):
+        """Checks that every node has a valid AVL balance factor."""
+        if node is None:
+            return True
+
+        return (
+            -1 <= node.balance_factor <= 1
+            and self._esta_balanceado(node.left)
+            and self._esta_balanceado(node.right)
+        )
 
     def _recuperar(self, node):
         """Recorre post-orden y rebalancea cada nodo."""
