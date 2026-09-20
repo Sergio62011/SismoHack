@@ -1,5 +1,6 @@
 """Business rules for the active seismic-event catalog."""
 
+from collections import deque
 from datetime import datetime, timezone
 from math import isfinite
 
@@ -20,7 +21,21 @@ class SistemaSismico:
         self.avl = AVL()
         self.mapa = mapa if mapa is not None else MapaSismico()
         self._eventos_activos = {}
+        self._historicos = {}
         self.ids_eliminados = set()
+        self.cola_reportes = deque()
+        self.ultimas_rotaciones = []
+        self.ultimo_reporte_procesado = None
+        self.metricas = {
+            "correcciones_aceptadas": 0,
+            "reportes_descartados": 0,
+            "conflictos": 0,
+            "confirmaciones": 0,
+            "creados_por_reporte": 0,
+            "reactivados": 0,
+            "archivos_masivos": 0,
+            "eventos_archivados": 0,
+        }
 
     def crear_evento(
         self,
@@ -65,6 +80,19 @@ class SistemaSismico:
         """Returns the active event with this ID, or None if it is absent."""
         return self._eventos_activos.get(self._validar_id(id_evento))
 
+    def consultar_evento(self, id_evento):
+        """Returns an event and its location: activo, archivado or eliminado."""
+        event_id = self._validar_id(id_evento)
+
+        if event_id in self._eventos_activos:
+            return {"estado": "activo", "evento": self._eventos_activos[event_id]}
+        if event_id in self._historicos:
+            return {"estado": "archivado", "evento": self._historicos[event_id]}
+        if event_id in self.ids_eliminados:
+            return {"estado": "eliminado", "evento": None}
+
+        return {"estado": "desconocido", "evento": None}
+
     def corregir_evento(
         self,
         id_evento,
@@ -91,17 +119,16 @@ class SistemaSismico:
 
         clave_anterior = evento.calcular_clave()
         self.avl.delete(clave_anterior)
+        rotaciones = list(self.avl.rotaciones_ultima_operacion)
 
-        evento.magnitud = datos["magnitud"]
-        evento.profundidad = datos["profundidad"]
-        evento.x = datos["x"]
-        evento.y = datos["y"]
-        evento.fecha_hora = datos["fecha_hora"]
+        self._aplicar_datos(evento, datos)
         evento.revision += 1
         evento.estado = "pendiente"
         self.mapa.asignar_zona_a_evento(evento)
 
         self.avl.insert(evento)
+        rotaciones.extend(self.avl.rotaciones_ultima_operacion)
+        self.ultimas_rotaciones = rotaciones
         return evento
 
     def marcar_revisado(self, id_evento):
@@ -120,12 +147,200 @@ class SistemaSismico:
         evento.ubicacion = "eliminado"
         return evento
 
+    def encolar_reporte(self, reporte):
+        """Adds one report to the pending FIFO queue."""
+        self.cola_reportes.append(reporte)
+
+    def hay_reportes_pendientes(self):
+        return len(self.cola_reportes) > 0
+
+    def cantidad_reportes_pendientes(self):
+        return len(self.cola_reportes)
+
+    def procesar_siguiente_reporte(self):
+        """Processes the oldest pending report in FIFO order."""
+        if not self.hay_reportes_pendientes():
+            return self._resultado(
+                "cola_vacia",
+                "No hay reportes pendientes",
+                None,
+                rotaciones=[],
+            )
+
+        reporte = self.cola_reportes.popleft()
+        self.ultimo_reporte_procesado = reporte
+        resultado = self.procesar_reporte(reporte)
+        resultado["reporte"] = reporte
+        resultado["pendientes_restantes"] = self.cantidad_reportes_pendientes()
+        return resultado
+
+    def procesar_continuo(self):
+        """Processes all pending reports. A future GUI can add visual pauses."""
+        resultados = []
+
+        while self.hay_reportes_pendientes():
+            resultados.append(self.procesar_siguiente_reporte())
+
+        return resultados
+
+    def procesar_reporte(self, reporte):
+        """Applies the rules for new, correction, confirmation and rejection."""
+        event_id = self._validar_id(reporte.id_evento)
+        revision = self._validar_revision(reporte.revision)
+        estacion = self._validar_estacion(reporte.estacion)
+        datos = self._validar_datos(
+            reporte.magnitud,
+            reporte.profundidad,
+            reporte.x,
+            reporte.y,
+            reporte.fecha_hora,
+        )
+
+        if event_id in self.ids_eliminados:
+            self.metricas["reportes_descartados"] += 1
+            return self._resultado(
+                "rechazado",
+                f"El evento {event_id} fue eliminado y no puede reactivarse",
+                None,
+                rotaciones=[],
+            )
+
+        archivado = self._historicos.get(event_id)
+        if archivado is not None:
+            if revision > archivado.revision:
+                self._aplicar_datos(archivado, datos)
+                archivado.revision = revision
+                archivado.estado = "pendiente"
+                archivado.ubicacion = "activo"
+                archivado.estaciones.add(estacion)
+                self.mapa.asignar_zona_a_evento(archivado)
+
+                self.avl.insert(archivado)
+                self._eventos_activos[event_id] = archivado
+                del self._historicos[event_id]
+                self.metricas["reactivados"] += 1
+                return self._resultado(
+                    "reactivado",
+                    f"Evento {event_id} reactivado desde historico",
+                    archivado,
+                )
+
+            self.metricas["reportes_descartados"] += 1
+            return self._resultado(
+                "archivado_ignorado",
+                f"Evento {event_id} archivado; el reporte no lo reactiva",
+                archivado,
+                rotaciones=[],
+            )
+
+        evento = self._eventos_activos.get(event_id)
+
+        if evento is None:
+            nuevo = Evento(
+                id_evento=event_id,
+                magnitud=datos["magnitud"],
+                profundidad=datos["profundidad"],
+                x=datos["x"],
+                y=datos["y"],
+                fecha_hora=datos["fecha_hora"],
+                revision=revision,
+                estado="pendiente",
+            )
+            nuevo.estaciones.add(estacion)
+            self.mapa.asignar_zona_a_evento(nuevo)
+
+            self.avl.insert(nuevo)
+            self._eventos_activos[event_id] = nuevo
+            self.metricas["creados_por_reporte"] += 1
+            return self._resultado(
+                "creado",
+                f"Evento {event_id} creado desde reporte",
+                nuevo,
+            )
+
+        if revision > evento.revision:
+            clave_anterior = evento.calcular_clave()
+            self.avl.delete(clave_anterior)
+            rotaciones = list(self.avl.rotaciones_ultima_operacion)
+
+            self._aplicar_datos(evento, datos)
+            evento.revision = revision
+            evento.estado = "pendiente"
+            evento.estaciones.add(estacion)
+            self.mapa.asignar_zona_a_evento(evento)
+
+            self.avl.insert(evento)
+            rotaciones.extend(self.avl.rotaciones_ultima_operacion)
+            self.metricas["correcciones_aceptadas"] += 1
+            return self._resultado(
+                "corregido",
+                f"Evento {event_id} corregido con una revision mayor",
+                evento,
+                rotaciones=rotaciones,
+            )
+
+        if revision == evento.revision:
+            if self._datos_iguales(evento, datos):
+                evento.estaciones.add(estacion)
+                self.metricas["confirmaciones"] += 1
+                return self._resultado(
+                    "confirmado",
+                    f"Evento {event_id} confirmado por {estacion}",
+                    evento,
+                    rotaciones=[],
+                )
+
+            self.metricas["conflictos"] += 1
+            return self._resultado(
+                "conflicto",
+                "Reporte rechazado: misma revision con datos distintos",
+                evento,
+                rotaciones=[],
+            )
+
+        self.metricas["reportes_descartados"] += 1
+        return self._resultado(
+            "antiguo",
+            f"Reporte descartado: revision {revision} menor que {evento.revision}",
+            evento,
+            rotaciones=[],
+        )
+
     def _obtener_activo(self, id_evento):
         event_id = self._validar_id(id_evento)
         evento = self._eventos_activos.get(event_id)
         if evento is None:
             raise ValueError(f"No existe un evento activo con ID {event_id}")
         return evento
+
+    @staticmethod
+    def _datos_iguales(evento, datos):
+        return (
+            round(evento.magnitud, 1) == round(datos["magnitud"], 1)
+            and round(evento.profundidad, 1) == round(datos["profundidad"], 1)
+            and round(evento.x, 1) == round(datos["x"], 1)
+            and round(evento.y, 1) == round(datos["y"], 1)
+            and evento.fecha_hora == datos["fecha_hora"]
+        )
+
+    def _resultado(self, decision, mensaje, evento, rotaciones=None):
+        if rotaciones is None:
+            rotaciones = self.avl.rotaciones_ultima_operacion
+
+        return {
+            "decision": decision,
+            "mensaje": mensaje,
+            "evento": evento,
+            "rotaciones": list(rotaciones),
+        }
+
+    @staticmethod
+    def _aplicar_datos(evento, datos):
+        evento.magnitud = datos["magnitud"]
+        evento.profundidad = datos["profundidad"]
+        evento.x = datos["x"]
+        evento.y = datos["y"]
+        evento.fecha_hora = datos["fecha_hora"]
 
     @staticmethod
     def _validar_id(id_evento):
@@ -155,6 +370,21 @@ class SistemaSismico:
         if not isinstance(estacion, str) or not estacion.strip():
             raise ValueError("La estación es obligatoria")
         return estacion.strip()
+
+    @staticmethod
+    def _validar_revision(revision):
+        if isinstance(revision, bool):
+            raise ValueError("La revisión debe ser un entero positivo")
+        try:
+            numero_revision = int(revision)
+        except (TypeError, ValueError) as error:
+            raise ValueError("La revisión debe ser un entero positivo") from error
+
+        if numero_revision != revision:
+            raise ValueError("La revisión debe ser un entero positivo")
+        if numero_revision <= 0:
+            raise ValueError("La revisión debe ser un entero positivo")
+        return numero_revision
 
     @classmethod
     def _validar_datos(cls, magnitud, profundidad, x, y, fecha_hora):

@@ -1,5 +1,5 @@
 # structure/avl.py
-from structure.node import Node
+from .node import Node
 
 
 class AVL:
@@ -8,12 +8,15 @@ class AVL:
         self.root = None
         self.modo_estres = False
         self.rotaciones_realizadas = 0
+        self.rotaciones_ultima_operacion = []
 
     # =========================================================
     # INSERT
     # =========================================================
 
     def insert(self, event):
+        self.rotaciones_ultima_operacion = []
+
         # The identifier is the earthquake identity, not merely a component
         # of its key. It cannot appear twice even after a key change.
         if self._find_by_id(self.root, event.id_evento) is not None:
@@ -87,10 +90,12 @@ class AVL:
 
         # Caso LL: rotación simple a la derecha
         if fb > 1 and node.left.balance_factor >= 0:
+            self.rotaciones_ultima_operacion.append("LL")
             return self._rotate_right(node)
 
         # Caso LR: rotación doble izquierda-derecha
         if fb > 1 and node.left.balance_factor < 0:
+            self.rotaciones_ultima_operacion.append("LR")
             node.left = self._rotate_left(node.left)
             if node.left is not None:
                 node.left.parent = node
@@ -98,10 +103,12 @@ class AVL:
 
         # Caso RR: rotación simple a la izquierda
         if fb < -1 and node.right.balance_factor <= 0:
+            self.rotaciones_ultima_operacion.append("RR")
             return self._rotate_left(node)
 
         # Caso RL: rotación doble derecha-izquierda
         if fb < -1 and node.right.balance_factor > 0:
+            self.rotaciones_ultima_operacion.append("RL")
             node.right = self._rotate_right(node.right)
             if node.right is not None:
                 node.right.parent = node
@@ -447,6 +454,7 @@ class AVL:
     # =========================================================
 
     def delete(self, key):
+        self.rotaciones_ultima_operacion = []
         self.root = self._delete(self.root, key)
 
         if self.root is not None:
@@ -534,6 +542,8 @@ class AVL:
         Recuperación global: aplica rotaciones bottom-up
         hasta que todo el árbol cumpla la propiedad AVL.
         """
+        self.rotaciones_ultima_operacion = []
+
         if self.root is None:
             return
 
