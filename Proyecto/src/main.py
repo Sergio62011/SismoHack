@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from structure.avl import AVL
 from structure.bst import BST
 from models.event import Evento
 from models.map import MapaSismico, Zona
+from models.report import Reporte
+from services.sistema_sismico import SistemaSismico
 
 
 def demo_mapa_y_zonas():
@@ -77,6 +79,102 @@ def crear_eventos():
 
 
 demo_mapa_y_zonas()
+
+
+def imprimir_resultado_reporte(numero, resultado):
+    evento = resultado["evento"]
+    evento_id = evento.id_evento if evento is not None else "None"
+
+    print(f"\nPaso {numero}")
+    print(f"Decision: {resultado['decision']}")
+    print(f"Mensaje: {resultado['mensaje']}")
+    print(f"Evento afectado: {evento_id}")
+    print(f"Rotaciones: {resultado['rotaciones']}")
+
+    if "reporte" in resultado:
+        print(f"Reporte procesado: {resultado['reporte']}")
+        print(f"Reportes pendientes: {resultado['pendientes_restantes']}")
+
+
+def demo_reportes():
+    print("=" * 60)
+    print("REPORTES CON COLA FIFO")
+    print("=" * 60)
+
+    sistema = SistemaSismico()
+    fecha = datetime(2026, 9, 7, 10, 0, 0, tzinfo=timezone.utc)
+
+    reportes = [
+        Reporte(10, 5.0, 40.0, 100.0, 100.0, fecha, 1, "ST-01"),
+        Reporte(10, 5.0, 40.0, 100.0, 100.0, fecha, 1, "ST-02"),
+        Reporte(10, 6.2, 15.0, 100.0, 100.0, fecha, 2, "ST-03"),
+        Reporte(10, 6.5, 15.0, 100.0, 100.0, fecha, 2, "ST-04"),
+        Reporte(10, 5.0, 40.0, 100.0, 100.0, fecha, 1, "ST-05"),
+    ]
+
+    for reporte in reportes:
+        sistema.encolar_reporte(reporte)
+
+    print(f"Reportes en cola al inicio: {sistema.cantidad_reportes_pendientes()}")
+
+    resultados = sistema.procesar_continuo()
+    for indice, resultado in enumerate(resultados, start=1):
+        imprimir_resultado_reporte(indice, resultado)
+
+    evento = sistema.buscar_por_id(10)
+    print("\nEstado final del evento 10")
+    print(f"Revision: {evento.revision}")
+    print(f"Magnitud: {evento.magnitud}")
+    print(f"Prioridad: {evento.prioridad}")
+    print(f"Estaciones: {sorted(evento.estaciones)}")
+    print(f"Metricas: {sistema.metricas}")
+
+    print("\nRotaciones producidas por reportes nuevos")
+    sistema_rotaciones = SistemaSismico()
+    for event_id in [100, 200, 300]:
+        resultado = sistema_rotaciones.procesar_reporte(
+            Reporte(event_id, 5.0, 40.0, 100.0, 100.0, fecha, 1, "ST-R")
+        )
+        print(
+            f"Evento {event_id}: "
+            f"decision={resultado['decision']}, "
+            f"rotaciones={resultado['rotaciones']}"
+        )
+
+    print("\nEliminados y archivados")
+    sistema_estados = SistemaSismico()
+    sistema_estados.crear_evento(50, 5.0, 40.0, 100.0, 100.0, fecha, "ST-01")
+    sistema_estados.eliminar_evento(50)
+    resultado_eliminado = sistema_estados.procesar_reporte(
+        Reporte(50, 6.0, 10.0, 100.0, 100.0, fecha, 2, "ST-02")
+    )
+    imprimir_resultado_reporte(1, resultado_eliminado)
+    print(f"Consulta evento 50: {sistema_estados.consultar_evento(50)}")
+
+    sistema_estados.crear_evento(70, 4.8, 40.0, 200.0, 200.0, fecha, "ST-01")
+    evento_archivado = sistema_estados.buscar_por_id(70)
+
+    # Archive manually only for this console demo.
+    sistema_estados.avl.delete(evento_archivado.calcular_clave())
+    del sistema_estados._eventos_activos[70]
+    evento_archivado.ubicacion = "archivado"
+    sistema_estados._historicos[70] = evento_archivado
+
+    resultado_archivado = sistema_estados.procesar_reporte(
+        Reporte(70, 4.8, 40.0, 200.0, 200.0, fecha, 1, "ST-02")
+    )
+    imprimir_resultado_reporte(2, resultado_archivado)
+    print(f"Consulta evento 70: {sistema_estados.consultar_evento(70)}")
+
+    resultado_reactivado = sistema_estados.procesar_reporte(
+        Reporte(70, 6.1, 20.0, 200.0, 200.0, fecha, 2, "ST-03")
+    )
+    imprimir_resultado_reporte(3, resultado_reactivado)
+    print(f"Consulta evento 70: {sistema_estados.consultar_evento(70)}")
+    print()
+
+
+demo_reportes()
 
 
 # ============================================
