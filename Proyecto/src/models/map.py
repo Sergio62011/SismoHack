@@ -19,6 +19,33 @@ class Zona:
     def simbolo(self):
         return "P" if self.poblada else "N"
 
+    # === Persistencia y copia ===
+
+    def to_dict(self):
+        return {
+            "nombre": self.nombre,
+            "x_min": self.x_min,
+            "y_min": self.y_min,
+            "x_max": self.x_max,
+            "y_max": self.y_max,
+            "poblada": self.poblada,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            data["nombre"],
+            data["x_min"], data["y_min"],
+            data["x_max"], data["y_max"],
+            data["poblada"],
+        )
+
+    def copia(self):
+        return Zona(
+            self.nombre, self.x_min, self.y_min,
+            self.x_max, self.y_max, self.poblada,
+        )
+
     def __repr__(self):
         tipo = "poblada" if self.poblada else "no poblada"
         return f"Zona({self.nombre}, {tipo})"
@@ -67,39 +94,68 @@ class MapaSismico:
 
     def crear_matriz_zonas(self):
         matriz = self.crear_matriz_vacia()
-
         for fila in range(self.filas):
             for columna in range(self.columnas):
                 x, y = self._centro_de_celda(fila, columna)
                 zonas = self.obtener_zonas_del_punto(x, y)
-
                 if any(zona.poblada for zona in zonas):
                     matriz[fila][columna] = "P"
                 elif len(zonas) > 0:
                     matriz[fila][columna] = "N"
-
         return matriz
 
     def crear_matriz_con_eventos(self, eventos):
         matriz = self.crear_matriz_zonas()
-
         for evento in eventos:
-            fila, columna = self.convertir_coordenada_a_celda(evento.x, evento.y)
+            fila, columna = self.convertir_coordenada_a_celda(
+                evento.x, evento.y
+            )
             matriz[fila][columna] = "E"
-
         return matriz
 
     def imprimir_matriz(self, matriz):
-        print("Leyenda: . = vacio | P = zona poblada | N = zona no poblada | E = evento")
+        print(
+            "Leyenda: . = vacio | P = zona poblada | "
+            "N = zona no poblada | E = evento"
+        )
         for fila in matriz:
             print(" ".join(fila))
 
     def _centro_de_celda(self, fila, columna):
         ancho_celda = self.ancho_km / self.columnas
         alto_celda = self.alto_km / self.filas
-
         x = (columna + 0.5) * ancho_celda
         fila_desde_abajo = (self.filas - 1) - fila
         y = (fila_desde_abajo + 0.5) * alto_celda
-
         return x, y
+
+    # === Persistencia y copia ===
+
+    def to_dict(self):
+        return {
+            "ancho_km": self.ancho_km,
+            "alto_km": self.alto_km,
+            "filas": self.filas,
+            "columnas": self.columnas,
+            "zonas": [z.to_dict() for z in self.zonas],
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        mapa = cls(
+            ancho_km=data["ancho_km"],
+            alto_km=data["alto_km"],
+            filas=data["filas"],
+            columnas=data["columnas"],
+        )
+        for z in data["zonas"]:
+            mapa.agregar_zona(Zona.from_dict(z))
+        return mapa
+
+    def copia(self):
+        nuevo = MapaSismico(
+            self.ancho_km, self.alto_km, self.filas, self.columnas
+        )
+        for z in self.zonas:
+            nuevo.agregar_zona(z.copia())
+        return nuevo

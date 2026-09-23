@@ -1,9 +1,8 @@
-"""Business rules for the active seismic-event catalog."""
-
 from collections import deque
 from datetime import datetime, timezone
 from math import isfinite
 
+from models.escenario import Escenario
 from models.event import Evento
 from models.map import MapaSismico
 from structure.avl import AVL
@@ -11,9 +10,11 @@ from structure.avl import AVL
 
 class SistemaSismico:
 
-    def __init__(self, mapa=None):
+    def __init__(self, escenario=None):
+        if escenario is None:
+            escenario = Escenario(MapaSismico())
+        self.escenario = escenario
         self.avl = AVL()
-        self.mapa = mapa if mapa is not None else MapaSismico()
         self._eventos_activos = {}
         self._historicos = {}
         self.ids_eliminados = set()
@@ -31,9 +32,21 @@ class SistemaSismico:
             "eventos_archivados": 0,
         }
 
-    # =========================================================
-    # ID VALIDATION
-    # =========================================================
+    # === Accesos rápidos ===
+
+    @property
+    def reloj(self):
+        return self.escenario.reloj
+
+    @property
+    def parametros(self):
+        return self.escenario.parametros
+
+    @property
+    def mapa(self):
+        return self.escenario.mapa
+
+    # === Validación de ID ===
 
     def _id_existe(self, event_id):
         return (
@@ -42,20 +55,20 @@ class SistemaSismico:
             or event_id in self.ids_eliminados
         )
 
-    # =========================================================
-    # CREATE
-    # =========================================================
+    # === CREATE ===
 
     def crear_evento(self, id_evento, magnitud, profundidad, x, y,
                      fecha_hora, estacion):
         event_id = self._validar_id(id_evento)
-
         if self._id_existe(event_id):
             raise ValueError(
                 f"El identificador {event_id} ya existe en el escenario"
             )
-
         datos = self._validar_datos(magnitud, profundidad, x, y, fecha_hora)
+        if not self.reloj.no_es_futura(datos["fecha_hora"]):
+            raise ValueError(
+                "La fecha del evento no puede ser posterior al reloj"
+            )
         estacion = self._validar_estacion(estacion)
 
         evento = Evento(
@@ -75,16 +88,13 @@ class SistemaSismico:
         self._eventos_activos[event_id] = evento
         return evento
 
-    # =========================================================
-    # READ
-    # =========================================================
+    # === READ ===
 
     def buscar_por_id(self, id_evento):
         return self._eventos_activos.get(self._validar_id(id_evento))
 
     def consultar_evento(self, id_evento):
         event_id = self._validar_id(id_evento)
-
         if event_id in self._eventos_activos:
             return {"estado": "activo",
                     "evento": self._eventos_activos[event_id]}
@@ -93,12 +103,9 @@ class SistemaSismico:
                     "evento": self._historicos[event_id]}
         if event_id in self.ids_eliminados:
             return {"estado": "eliminado", "evento": None}
-
         return {"estado": "desconocido", "evento": None}
 
-    # =========================================================
-    # UPDATE
-    # =========================================================
+    # === UPDATE ===
 
     def corregir_evento(self, id_evento, *, magnitud=None, profundidad=None,
                         x=None, y=None, fecha_hora=None):
@@ -110,6 +117,10 @@ class SistemaSismico:
             evento.y if y is None else y,
             evento.fecha_hora if fecha_hora is None else fecha_hora,
         )
+        if not self.reloj.no_es_futura(datos["fecha_hora"]):
+            raise ValueError(
+                "La fecha del evento no puede ser posterior al reloj"
+            )
 
         clave_anterior = evento.calcular_clave()
         self.avl.delete(clave_anterior)
@@ -139,9 +150,24 @@ class SistemaSismico:
         evento.ubicacion = "eliminado"
         return evento
 
-    # =========================================================
-    # QUEUE
-    # =========================================================
+    # === RELOJ Y PARÁMETROS ===
+
+    def avanzar_reloj(self, segundos):
+        self.reloj.avanzar(segundos)
+
+    def set_w(self, valor):
+        self.parametros.set_w(valor)
+
+    def set_r(self, valor):
+        self.parametros.set_r(valor)
+
+    def set_l(self, valor):
+        self.parametros.set_l(valor)
+
+    def set_t(self, valor):
+        self.parametros.set_t(valor)
+
+    # === COLA ===
 
     def encolar_reporte(self, reporte):
         self.cola_reportes.append(reporte)
@@ -155,9 +181,9 @@ class SistemaSismico:
     def procesar_siguiente_reporte(self):
         if not self.hay_reportes_pendientes():
             return self._resultado(
-                "cola_vacia", "No hay reportes pendientes", None, rotaciones=[]
+                "cola_vacia", "No hay reportes pendientes", None,
+                rotaciones=[],
             )
-
         reporte = self.cola_reportes.popleft()
         self.ultimo_reporte_procesado = reporte
         resultado = self.procesar_reporte(reporte)
@@ -171,9 +197,7 @@ class SistemaSismico:
             resultados.append(self.procesar_siguiente_reporte())
         return resultados
 
-    # =========================================================
-    # REPORT PROCESSING
-    # =========================================================
+    # === REPORT PROCESSING ===
 
     def procesar_reporte(self, reporte):
         event_id = self._validar_id(reporte.id_evento)
@@ -210,7 +234,6 @@ class SistemaSismico:
                     f"Evento {event_id} reactivado desde historico",
                     archivado,
                 )
-
             self.metricas["reportes_descartados"] += 1
             return self._resultado(
                 "archivado_ignorado",
@@ -244,13 +267,11 @@ class SistemaSismico:
             clave_anterior = evento.calcular_clave()
             self.avl.delete(clave_anterior)
             rotaciones = list(self.avl.rotaciones_ultima_operacion)
-
             self._aplicar_datos(evento, datos)
             evento.revision = revision
             evento.estado = "pendiente"
             evento.estaciones.add(estacion)
             self.mapa.asignar_zona_a_evento(evento)
-
             self.avl.insert(evento)
             rotaciones.extend(self.avl.rotaciones_ultima_operacion)
             self.metricas["correcciones_aceptadas"] += 1
@@ -283,9 +304,7 @@ class SistemaSismico:
             evento, rotaciones=[],
         )
 
-    # =========================================================
-    # INTERNAL HELPERS
-    # =========================================================
+    # === INTERNAL HELPERS ===
 
     def _obtener_activo(self, id_evento):
         event_id = self._validar_id(id_evento)
@@ -322,9 +341,7 @@ class SistemaSismico:
         evento.y = datos["y"]
         evento.fecha_hora = datos["fecha_hora"]
 
-    # =========================================================
-    # VALIDATION
-    # =========================================================
+    # === VALIDATION ===
 
     @staticmethod
     def _validar_id(id_evento):
@@ -339,7 +356,9 @@ class SistemaSismico:
             try:
                 event_id = int(id_evento)
             except (TypeError, ValueError) as error:
-                raise ValueError("El identificador debe ser un entero") from error
+                raise ValueError(
+                    "El identificador debe ser un entero"
+                ) from error
             if event_id != id_evento:
                 raise ValueError("El identificador debe ser un entero")
         if not 1 <= event_id <= 999999:
@@ -359,7 +378,9 @@ class SistemaSismico:
         try:
             numero_revision = int(revision)
         except (TypeError, ValueError) as error:
-            raise ValueError("La revisión debe ser un entero positivo") from error
+            raise ValueError(
+                "La revisión debe ser un entero positivo"
+            ) from error
         if numero_revision != revision:
             raise ValueError("La revisión debe ser un entero positivo")
         if numero_revision <= 0:
