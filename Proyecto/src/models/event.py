@@ -28,28 +28,28 @@ class Evento:
         # === Revisión y estado ===
         self.revision = int(revision)
         self.estado = estado  # "pendiente" | "revisado"
-        self.estaciones: Set[str] = set()  # ← NUEVO
-        self.en_zona_poblada = zona_poblada                 # ← NUEVO
+        self.estaciones: Set[str] = set()
+        self.en_zona_poblada = zona_poblada
         
         # === Datos derivados ===
-        self.prioridad = self._calcular_prioridad()  # se recalcula
-        self.acceso_costoso = False                  # ← NUEVO
+        self.prioridad = self._calcular_prioridad()
+        self.acceso_costoso = False
         
         # === Ubicación lógica ===
         self.ubicacion = "activo"  # "activo" | "archivado" | "eliminado"
         
         # === Asociaciones ===
-        self.referencia: Optional[int] = None  # ID del evento referencia
-        self.referenciado_por: Set[int] = set()  # IDs que lo usan
-    
+        self.referencia: Optional[int] = None
+        self.referenciado_por: Set[int] = set()
+
     # === Cálculo de prioridad (Sección 4 del PDF) ===
     def _calcular_prioridad(self) -> int:
         """Calcula la prioridad según reglas del proyecto."""
         if self.magnitud >= 6.0:
             return 3
-        if (self.magnitud >= 4.5 and 
-            self.profundidad <= 30.0 and 
-            self.en_zona_poblada):
+        if (self.magnitud >= 4.5 and
+                self.profundidad <= 30.0 and
+                self.en_zona_poblada):
             return 3
         if self.magnitud >= 4.5:
             return 2
@@ -60,7 +60,7 @@ class Evento:
         """Devuelve la clave ordenable para el AVL."""
         return (self.prioridad, self.magnitud, self.id_evento)
     
-    # === Recalcular prioridad (tras corrección o cambio de zona) ===
+    # === Recalcular prioridad ===
     def recalcular_prioridad(self):
         self.prioridad = self._calcular_prioridad()
     
@@ -72,7 +72,7 @@ class Evento:
         return self.calcular_clave() == otro.calcular_clave()
     
     def __hash__(self):
-        return hash(self.calcular_clave())
+        return hash(self.id_evento)
     
     # === Representación para debug ===
     def __repr__(self):
