@@ -493,6 +493,12 @@ def demo_validaciones():
 # =========================================================
 
 if __name__ == "__main__":
+    import sys
+
+    if "--ui" in sys.argv:
+        from ui.main_window import ejecutar_aplicacion
+        sys.exit(ejecutar_aplicacion())
+
     demo_mapa_y_zonas()
     demo_prioridad_y_clave()
     demo_rotaciones()
