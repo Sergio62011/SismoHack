@@ -5,6 +5,7 @@ from math import isfinite
 from models.escenario import Escenario
 from models.event import Evento
 from models.map import MapaSismico
+from models.station import Estacion
 from structure.avl import AVL
 
 
@@ -46,6 +47,32 @@ class SistemaSismico:
     def mapa(self):
         return self.escenario.mapa
 
+    @property
+    def estaciones(self):
+        """Catálogo de estaciones del escenario, indexado por su ID."""
+        return self.escenario.estaciones
+
+    # === ESTACIONES ===
+
+    def registrar_estacion(self, id_estacion, nombre):
+        """Registra una estación y devuelve el objeto creado.
+
+        Los eventos conservan solamente el ID de la estación; el nombre y
+        demás metadatos pertenecen al catálogo del escenario.
+        """
+        estacion = Estacion(id_estacion, nombre)
+        if estacion.id_estacion in self.estaciones:
+            raise ValueError(
+                f"Ya existe una estación con ID {estacion.id_estacion}"
+            )
+        self.estaciones[estacion.id_estacion] = estacion
+        return estacion
+
+    def obtener_estacion(self, id_estacion):
+        """Devuelve la estación registrada o ``None`` si no existe."""
+        estacion_id = self._validar_estacion(id_estacion)
+        return self.estaciones.get(estacion_id)
+
     # === Validación de ID ===
 
     def _id_existe(self, event_id):
@@ -69,7 +96,7 @@ class SistemaSismico:
             raise ValueError(
                 "La fecha del evento no puede ser posterior al reloj"
             )
-        estacion = self._validar_estacion(estacion)
+        estacion = self._resolver_estacion(estacion)
 
         evento = Evento(
             id_evento=event_id,
@@ -202,7 +229,7 @@ class SistemaSismico:
     def procesar_reporte(self, reporte):
         event_id = self._validar_id(reporte.id_evento)
         revision = self._validar_revision(reporte.revision)
-        estacion = self._validar_estacion(reporte.estacion)
+        estacion = self._resolver_estacion(reporte.estacion)
         datos = self._validar_datos(
             reporte.magnitud, reporte.profundidad,
             reporte.x, reporte.y, reporte.fecha_hora,
@@ -340,6 +367,19 @@ class SistemaSismico:
         evento.x = datos["x"]
         evento.y = datos["y"]
         evento.fecha_hora = datos["fecha_hora"]
+
+    def _resolver_estacion(self, estacion):
+        """Obtiene el ID de estación y lo garantiza en el catálogo.
+
+        El resto de la aplicación usa IDs de texto en eventos y reportes. Para
+        mantener compatibles los formularios, reportes y demos previos, un ID
+        aún no registrado se incorpora con el mismo valor como nombre
+        provisional.
+        """
+        estacion_id = self._validar_estacion(estacion)
+        if estacion_id not in self.estaciones:
+            self.registrar_estacion(estacion_id, estacion_id)
+        return estacion_id
 
     # === VALIDATION ===
 
