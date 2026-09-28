@@ -127,13 +127,22 @@ class Parametros:
 
 
 class Escenario:
-    """Estado del escenario: reloj, parámetros y mapa."""
+    """Estado del escenario: reloj, parámetros, mapa y estaciones."""
 
-    def __init__(self, mapa, reloj=None, parametros=None):
+    def __init__(
+        self,
+        mapa,
+        reloj=None,
+        parametros=None,
+        estaciones=None
+    ):
         self.mapa = mapa
         self.reloj = reloj if reloj is not None else Reloj()
         self.parametros = (
             parametros if parametros is not None else Parametros()
+        )
+        self.estaciones = (
+            estaciones if estaciones is not None else {}
         )
 
     # === Persistencia y copia ===
@@ -143,28 +152,47 @@ class Escenario:
             "reloj": self.reloj.to_dict(),
             "parametros": self.parametros.to_dict(),
             "mapa": self.mapa.to_dict(),
+            "estaciones": {
+                id_estacion: estacion.to_dict()
+                for id_estacion, estacion in self.estaciones.items()
+            },
         }
 
     @classmethod
     def from_dict(cls, data):
         from models.map import MapaSismico
+        from models.station import Estacion
+
         if "reloj" not in data:
             raise ValueError("El escenario debe tener 'reloj'")
         if "parametros" not in data:
             raise ValueError("El escenario debe tener 'parametros'")
         if "mapa" not in data:
             raise ValueError("El escenario debe tener 'mapa'")
+
+        estaciones = {
+            id_estacion: Estacion.from_dict(datos)
+            for id_estacion, datos in data.get("estaciones", {}).items()
+        }
+
         return cls(
             mapa=MapaSismico.from_dict(data["mapa"]),
             reloj=Reloj.from_dict(data["reloj"]),
             parametros=Parametros.from_dict(data["parametros"]),
+            estaciones=estaciones,
         )
 
     def copia(self):
+        estaciones = {
+            id_estacion: estacion.copia()
+            for id_estacion, estacion in self.estaciones.items()
+        }
+
         return Escenario(
             mapa=self.mapa.copia(),
             reloj=self.reloj.copia(),
             parametros=self.parametros.copia(),
+            estaciones=estaciones,
         )
 
     def __repr__(self):
