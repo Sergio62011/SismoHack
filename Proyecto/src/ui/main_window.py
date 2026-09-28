@@ -577,11 +577,11 @@ class VentanaPrincipal(QMainWindow):
         for nodo in nodos:
             x, y = posiciones[id(nodo)]
             self.escena_arbol.addEllipse(
-                x - 35, y - 25, 70, 50,
+                x - 25, y - 25, 50, 50,
                 QPen(QColor("#1967a8"), 2), QBrush(QColor("#dcecf8")),
             )
             texto = self.escena_arbol.addText(
-                f"ID {nodo.event.id_evento}\nh={nodo.height}  fb={nodo.balance_factor}"
+                f"ID {nodo.event.id_evento}\nP={nodo.event.prioridad}"
             )
             texto.setDefaultTextColor(QColor("#172b4d"))
             rectangulo = texto.boundingRect()
