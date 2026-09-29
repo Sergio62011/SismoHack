@@ -1,10 +1,7 @@
-"""PySide6 interface for the SismoLab AVL project."""
-
 import sys
 from datetime import datetime, timezone
-
 from PySide6.QtCore import QDateTime, Qt
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -39,6 +36,34 @@ from models.map import Zona
 from models.report import Reporte
 from services.sistema_sismico import SistemaSismico
 
+class VistaArbolConZoom(QGraphicsView):
+
+    def __init__(self, escena, parent=None):
+        super().__init__(escena, parent)
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        self.setBackgroundBrush(QBrush(QColor("#fafbfc")))
+        self.setMinimumHeight(290)
+        self.setStyleSheet(
+            "QGraphicsView { background: #fafbfc; border: 1px solid #d8e0e8; }"
+        )
+
+    def wheelEvent(self, event):
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            factor = 1.2 if event.angleDelta().y() > 0 else 1 / 1.2
+            self.scale(factor, factor)
+            event.accept()
+        else:
+            super().wheelEvent(event)
 
 class VentanaPrincipal(QMainWindow):
     """Desktop view that uses the existing SismoLab service."""
@@ -137,7 +162,9 @@ class VentanaPrincipal(QMainWindow):
             nombre = QLabel(texto)
             nombre.setStyleSheet("color: #52616f;")
             valor = QLabel("0")
-            valor.setStyleSheet("font-size: 22px; font-weight: 700; color: #17324d;")
+            valor.setStyleSheet(
+                "font-size: 22px; font-weight: 700; color: #17324d;"
+            )
             tarjeta_layout.addWidget(nombre)
             tarjeta_layout.addWidget(valor)
             self.etiquetas_resumen[clave] = valor
@@ -146,14 +173,34 @@ class VentanaPrincipal(QMainWindow):
 
         grupo_arbol = QGroupBox("Vista grafica del AVL")
         arbol_layout = QVBoxLayout(grupo_arbol)
-        ayuda = QLabel("Cada nodo muestra: ID, altura y factor de balance.")
+        ayuda = QLabel(
+            "Cada nodo muestra: ID, prioridad, magnitud, altura y factor de balance. "
+            "Arrastra con el mouse para desplazarte. Ctrl + rueda para zoom."
+        )
+        ayuda.setWordWrap(True)
         ayuda.setStyleSheet("color: #52616f;")
-        self.escena_arbol = QGraphicsScene(self)
-        self.vista_arbol = QGraphicsView(self.escena_arbol)
-        self.vista_arbol.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self.vista_arbol.setMinimumHeight(290)
-        self.vista_arbol.setStyleSheet("background: white; border: 1px solid #d8e0e8;")
         arbol_layout.addWidget(ayuda)
+
+        # Barra de herramientas del árbol
+        barra_arbol = QHBoxLayout()
+        boton_zoom_in = QPushButton("Zoom +")
+        boton_zoom_out = QPushButton("Zoom -")
+        boton_reset = QPushButton("Reset vista")
+        boton_zoom_in.clicked.connect(
+            lambda: self.vista_arbol.scale(1.2, 1.2)
+        )
+        boton_zoom_out.clicked.connect(
+            lambda: self.vista_arbol.scale(1 / 1.2, 1 / 1.2)
+        )
+        boton_reset.clicked.connect(self._reset_vista_arbol)
+        barra_arbol.addWidget(boton_zoom_in)
+        barra_arbol.addWidget(boton_zoom_out)
+        barra_arbol.addWidget(boton_reset)
+        barra_arbol.addStretch()
+        arbol_layout.addLayout(barra_arbol)
+
+        self.escena_arbol = QGraphicsScene(self)
+        self.vista_arbol = VistaArbolConZoom(self.escena_arbol)
         arbol_layout.addWidget(self.vista_arbol)
         layout.addWidget(grupo_arbol, 1)
 
@@ -552,43 +599,107 @@ class VentanaPrincipal(QMainWindow):
             texto.setPos(20, 20)
             self.escena_arbol.setSceneRect(0, 0, 500, 120)
             return
-        nodos = []
-        posiciones = {}
-        indice = 0
 
-        def asignar_posiciones(nodo, nivel):
-            nonlocal indice
+        cantidad = self.sistema.avl.size()
+        ancho_total = max(1200.0, 150.0 * cantidad)
+        margen_x = 70.0
+        separacion_y = 110.0
+        radio = 30.0
+
+        posiciones = {}
+
+        def asignar_posiciones(nodo, nivel, x_min, x_max):
             if nodo is None:
                 return
-            asignar_posiciones(nodo.left, nivel + 1)
-            posiciones[id(nodo)] = (55 + indice * 105, 40 + nivel * 100)
-            nodos.append(nodo)
-            indice += 1
-            asignar_posiciones(nodo.right, nivel + 1)
+            x = (x_min + x_max) / 2.0
+            y = 70.0 + nivel * separacion_y
+            posiciones[id(nodo)] = (x, y)
+            asignar_posiciones(nodo.left, nivel + 1, x_min, x)
+            asignar_posiciones(nodo.right, nivel + 1, x, x_max)
 
-        asignar_posiciones(raiz, 0)
-        enlace = QPen(QColor("#7d98b3"), 2)
-        for nodo in nodos:
+        asignar_posiciones(raiz, 0, margen_x, ancho_total - margen_x)
+
+        # Colores por prioridad
+        colores_prioridad = {
+            3: ("#fdecea", "#c0392b"),  # alta
+            2: ("#fef5e7", "#b9770e"),  # media
+            1: ("#eafaf1", "#1e8449"),  # baja
+        }
+
+        # Enlaces con curvas suaves
+        enlace_pen = QPen(QColor("#8aa0b8"), 2)
+        enlace_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+
+        def dibujar_enlaces(nodo):
+            if nodo is None:
+                return
             x, y = posiciones[id(nodo)]
             for hijo in (nodo.left, nodo.right):
                 if hijo is not None:
-                    hijo_x, hijo_y = posiciones[id(hijo)]
-                    self.escena_arbol.addLine(x, y + 24, hijo_x, hijo_y - 24, enlace)
-        for nodo in nodos:
+                    hx, hy = posiciones[id(hijo)]
+                    path = QPainterPath()
+                    path.moveTo(x, y + radio - 4)
+                    path.cubicTo(
+                        x, y + separacion_y * 0.6,
+                        hx, hy - separacion_y * 0.6,
+                        hx, hy - radio + 4,
+                    )
+                    self.escena_arbol.addPath(path, enlace_pen)
+            dibujar_enlaces(nodo.left)
+            dibujar_enlaces(nodo.right)
+
+        dibujar_enlaces(raiz)
+
+        # Nodos redondos con ID y prioridad
+        def dibujar_nodos(nodo):
+            if nodo is None:
+                return
             x, y = posiciones[id(nodo)]
+            fondo, borde = colores_prioridad.get(
+                nodo.event.prioridad, ("#dcecf8", "#1967a8")
+            )
+
             self.escena_arbol.addEllipse(
-                x - 25, y - 25, 50, 50,
-                QPen(QColor("#1967a8"), 2), QBrush(QColor("#dcecf8")),
+                x - radio, y - radio,
+                radio * 2, radio * 2,
+                QPen(QColor(borde), 2),
+                QBrush(QColor(fondo)),
             )
-            texto = self.escena_arbol.addText(
-                f"ID {nodo.event.id_evento}\nP={nodo.event.prioridad}"
-            )
+
+            etiqueta = f"ID {nodo.event.id_evento}\nP={nodo.event.prioridad}"
+            texto = self.escena_arbol.addText(etiqueta)
             texto.setDefaultTextColor(QColor("#172b4d"))
-            rectangulo = texto.boundingRect()
-            texto.setPos(x - rectangulo.width() / 2, y - rectangulo.height() / 2)
-        rectangulo = self.escena_arbol.itemsBoundingRect().adjusted(-35, -25, 35, 25)
+            fuente = texto.font()
+            fuente.setPointSize(9)
+            texto.setFont(fuente)
+            rect_texto = texto.boundingRect()
+            texto.setPos(
+                x - rect_texto.width() / 2,
+                y - rect_texto.height() / 2,
+            )
+
+            dibujar_nodos(nodo.left)
+            dibujar_nodos(nodo.right)
+
+        dibujar_nodos(raiz)
+
+        # Margen generoso abajo para que no se corten las hojas
+        rectangulo = self.escena_arbol.itemsBoundingRect().adjusted(
+            -60, -40, 60, 120
+        )
         self.escena_arbol.setSceneRect(rectangulo)
-        self.vista_arbol.fitInView(rectangulo, Qt.AspectRatioMode.KeepAspectRatio)
+        # No llamamos a fitInView: el scroll aparece cuando hace falta.
+        
+    def _reset_vista_arbol(self):
+        self.vista_arbol.resetTransform()
+        rect = self.escena_arbol.itemsBoundingRect().adjusted(
+            -40, -30, 40, 30
+        )
+        if rect.isEmpty():
+            rect = self.escena_arbol.sceneRect()
+        self.vista_arbol.fitInView(
+            rect, Qt.AspectRatioMode.KeepAspectRatio
+        )
 
     def _actualizar_botones_evento(self):
         hay_seleccion = self._id_seleccionado() is not None
