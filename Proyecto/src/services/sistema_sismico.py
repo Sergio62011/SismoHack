@@ -7,6 +7,7 @@ from models.event import Evento
 from models.map import MapaSismico
 from models.station import Estacion
 from structure.avl import AVL
+from services.historial import Accion, Historial
 
 
 class SistemaSismico:
@@ -32,8 +33,7 @@ class SistemaSismico:
             "archivos_masivos": 0,
             "eventos_archivados": 0,
         }
-
-    # === Accesos rápidos ===
+        self.historial = Historial()
 
     @property
     def reloj(self):
@@ -49,17 +49,9 @@ class SistemaSismico:
 
     @property
     def estaciones(self):
-        """Catálogo de estaciones del escenario, indexado por su ID."""
         return self.escenario.estaciones
 
-    # === ESTACIONES ===
-
     def registrar_estacion(self, id_estacion, nombre):
-        """Registra una estación y devuelve el objeto creado.
-
-        Los eventos conservan solamente el ID de la estación; el nombre y
-        demás metadatos pertenecen al catálogo del escenario.
-        """
         estacion = Estacion(id_estacion, nombre)
         if estacion.id_estacion in self.estaciones:
             raise ValueError(
@@ -69,11 +61,8 @@ class SistemaSismico:
         return estacion
 
     def obtener_estacion(self, id_estacion):
-        """Devuelve la estación registrada o ``None`` si no existe."""
         estacion_id = self._validar_estacion(id_estacion)
         return self.estaciones.get(estacion_id)
-
-    # === Validación de ID ===
 
     def _id_existe(self, event_id):
         return (
@@ -81,6 +70,47 @@ class SistemaSismico:
             or event_id in self._historicos
             or event_id in self.ids_eliminados
         )
+
+    def _snapshot(self):
+        return {
+            "avl": self.avl.copia(),
+            "activos": {
+                k: evento.copia() for k, evento in self._eventos_activos.items()
+            },
+            "historicos": {
+                k: historico.copia() for k, historico in self._historicos.items()
+            },
+            "eliminados": set(self.ids_eliminados),
+            "cola": deque(reporte.copia() for reporte in self.cola_reportes),
+            "escenario": self.escenario.copia(),
+            "modo_estres": self.avl.modo_estres,
+            "metricas": dict(self.metricas),
+        }
+
+    def _restaurar(self, snapshot):
+        self.avl = snapshot["avl"]
+        self._eventos_activos = snapshot["activos"]
+        self._historicos = snapshot["historicos"]
+        self.ids_eliminados = snapshot["eliminados"]
+        self.cola_reportes = snapshot["cola"]
+        self.escenario = snapshot["escenario"]
+        self.avl.modo_estres = snapshot["modo_estres"]
+        self.metricas = snapshot["metricas"]
+
+    def deshacer(self):
+        accion = self.historial.deshacer()
+        if accion is None:
+            return False
+        self._restaurar(accion.estado_antes)
+        return True
+
+    def puede_deshacer(self):
+        return not self.historial.pila_vacia()
+
+    def descripcion_ultima_accion(self):
+        if self.historial.pila_vacia():
+            return None
+        return self.historial._pila[-1].descripcion
 
     # === CREATE ===
 
@@ -98,22 +128,31 @@ class SistemaSismico:
             )
         estacion = self._resolver_estacion(estacion)
 
-        evento = Evento(
-            id_evento=event_id,
-            magnitud=datos["magnitud"],
-            profundidad=datos["profundidad"],
-            x=datos["x"],
-            y=datos["y"],
-            fecha_hora=datos["fecha_hora"],
-            revision=1,
-            estado="pendiente",
-        )
-        evento.estaciones.add(estacion)
-        self.mapa.asignar_zona_a_evento(evento)
+        estado_antes = self._snapshot()
+        try:
+            evento = Evento(
+                id_evento=event_id,
+                magnitud=datos["magnitud"],
+                profundidad=datos["profundidad"],
+                x=datos["x"],
+                y=datos["y"],
+                fecha_hora=datos["fecha_hora"],
+                revision=1,
+                estado="pendiente",
+            )
+            evento.estaciones.add(estacion)
+            self.mapa.asignar_zona_a_evento(evento)
 
-        self.avl.insert(evento)
-        self._eventos_activos[event_id] = evento
-        return evento
+            self.avl.insert(evento)
+            self._eventos_activos[event_id] = evento
+
+            self.historial.registro_accion(
+                Accion(f"crear_evento {event_id}", estado_antes)
+            )
+            return evento
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     # === READ ===
 
@@ -131,12 +170,6 @@ class SistemaSismico:
         if event_id in self.ids_eliminados:
             return {"estado": "eliminado", "evento": None}
         return {"estado": "desconocido", "evento": None}
-    
-    def detalle_evento(self, id_event):
-        estado_evento = self.consultar_evento(id_event)
-        if estado_evento["estado"] == "activo":
-            pass
-        
 
     # === UPDATE ===
 
@@ -155,50 +188,137 @@ class SistemaSismico:
                 "La fecha del evento no puede ser posterior al reloj"
             )
 
-        clave_anterior = evento.calcular_clave()
-        self.avl.delete(clave_anterior)
-        rotaciones = list(self.avl.rotaciones_ultima_operacion)
+        estado_antes = self._snapshot()
+        try:
+            clave_anterior = evento.calcular_clave()
+            self.avl.delete(clave_anterior)
+            rotaciones = list(self.avl.rotaciones_ultima_operacion)
 
-        self._aplicar_datos(evento, datos)
-        evento.revision += 1
-        evento.estado = "pendiente"
-        self.mapa.asignar_zona_a_evento(evento)
+            self._aplicar_datos(evento, datos)
+            evento.revision += 1
+            evento.estado = "pendiente"
+            self.mapa.asignar_zona_a_evento(evento)
 
-        self.avl.insert(evento)
-        rotaciones.extend(self.avl.rotaciones_ultima_operacion)
-        self.ultimas_rotaciones = rotaciones
-        return evento
+            self.avl.insert(evento)
+            rotaciones.extend(self.avl.rotaciones_ultima_operacion)
+            self.ultimas_rotaciones = rotaciones
+
+            self.historial.registro_accion(
+                Accion(f"corregir_evento {evento.id_evento}", estado_antes)
+            )
+            return evento
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def marcar_revisado(self, id_evento):
         evento = self._obtener_activo(id_evento)
-        evento.estado = "revisado"
-        return evento
+        estado_antes = self._snapshot()
+        try:
+            evento.estado = "revisado"
+            self.historial.registro_accion(
+                Accion(f"marcar_revisado {evento.id_evento}", estado_antes)
+            )
+            return evento
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def eliminar_evento(self, id_evento):
         event_id = self._validar_id(id_evento)
         evento = self._obtener_activo(event_id)
-        self.avl.delete(evento.calcular_clave())
-        del self._eventos_activos[event_id]
-        self.ids_eliminados.add(event_id)
-        evento.ubicacion = "eliminado"
-        return evento
+
+        estado_antes = self._snapshot()
+        try:
+            self.avl.delete(evento.calcular_clave())
+            del self._eventos_activos[event_id]
+            self.ids_eliminados.add(event_id)
+            evento.ubicacion = "eliminado"
+
+            self.historial.registro_accion(
+                Accion(f"eliminar_evento {event_id}", estado_antes)
+            )
+            return evento
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     # === RELOJ Y PARÁMETROS ===
+    
+    def saltar_reloj(self, fecha_hora):
+        if fecha_hora.tzinfo is None:
+            raise ValueError("La fecha debe tener zona horaria UTC")
+        fecha_hora = fecha_hora.astimezone(timezone.utc)
+
+        if fecha_hora < self.reloj.instante:
+            raise ValueError(
+                f"La fecha es menor que la fecha actual "
+                f"la nueva hora del reloj. No se puede retroceder.")
+
+        estado_antes = self._snapshot()
+        try:
+            self.reloj.saltar_a(fecha_hora)
+            self.historial.registro_accion(
+                Accion(f"saltar_reloj {fecha_hora.isoformat()}", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def avanzar_reloj(self, segundos):
-        self.reloj.avanzar(segundos)
+        estado_antes = self._snapshot()
+        try:
+            self.reloj.avanzar(segundos)
+            self.historial.registro_accion(
+                Accion(f"avanzar_reloj {segundos}s", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def set_w(self, valor):
-        self.parametros.set_w(valor)
+        estado_antes = self._snapshot()
+        try:
+            self.parametros.set_w(valor)
+            self.historial.registro_accion(
+                Accion(f"set_w {valor}", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def set_r(self, valor):
-        self.parametros.set_r(valor)
+        estado_antes = self._snapshot()
+        try:
+            self.parametros.set_r(valor)
+            self.historial.registro_accion(
+                Accion(f"set_r {valor}", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def set_l(self, valor):
-        self.parametros.set_l(valor)
+        estado_antes = self._snapshot()
+        try:
+            self.parametros.set_l(valor)
+            self.historial.registro_accion(
+                Accion(f"set_l {valor}", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def set_t(self, valor):
-        self.parametros.set_t(valor)
+        estado_antes = self._snapshot()
+        try:
+            self.parametros.set_t(valor)
+            self.historial.registro_accion(
+                Accion(f"set_t {valor}", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     # === COLA ===
 
@@ -217,12 +337,28 @@ class SistemaSismico:
                 "cola_vacia", "No hay reportes pendientes", None,
                 rotaciones=[],
             )
-        reporte = self.cola_reportes.popleft()
-        self.ultimo_reporte_procesado = reporte
-        resultado = self.procesar_reporte(reporte)
-        resultado["reporte"] = reporte
-        resultado["pendientes_restantes"] = self.cantidad_reportes_pendientes()
-        return resultado
+            
+        estado_antes = self._snapshot()
+        try:
+            reporte = self.cola_reportes.popleft()
+            self.ultimo_reporte_procesado = reporte
+            resultado = self.procesar_reporte(reporte)
+            resultado["reporte"] = reporte
+            resultado["pendientes_restantes"] = (
+                self.cantidad_reportes_pendientes()
+            )
+
+            self.historial.registro_accion(
+                Accion(
+                    f"procesar_reporte {reporte.id_evento} "
+                    f"rev {reporte.revision}",
+                    estado_antes,
+                )
+            )
+            return resultado
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
 
     def procesar_continuo(self):
         resultados = []
@@ -375,13 +511,6 @@ class SistemaSismico:
         evento.fecha_hora = datos["fecha_hora"]
 
     def _resolver_estacion(self, estacion):
-        """Obtiene el ID de estación y lo garantiza en el catálogo.
-
-        El resto de la aplicación usa IDs de texto en eventos y reportes. Para
-        mantener compatibles los formularios, reportes y demos previos, un ID
-        aún no registrado se incorpora con el mismo valor como nombre
-        provisional.
-        """
         estacion_id = self._validar_estacion(estacion)
         if estacion_id not in self.estaciones:
             self.registrar_estacion(estacion_id, estacion_id)

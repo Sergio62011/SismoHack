@@ -6,18 +6,18 @@ class Accion():
 
 class Historial:
     def __init__(self):
-        self.pila = []
+        self._pila = []
         
     def registro_accion(self, accion):
-        self.pila.append(accion)
+        self._pila.append(accion)
         
     def deshacer(self):
-        if not self.pila:
+        if not self._pila:
             return None
-        return self.pila.pop()
+        return self._pila.pop()
     
     def pila_vacia(self):
-        return len(self.pila) == 0
+        return len(self._pila) == 0
     
     def cantidad(self):
         return len(self._pila)

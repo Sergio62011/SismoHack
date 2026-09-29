@@ -34,6 +34,11 @@ class Reloj:
             raise ValueError("La fecha debe tener zona horaria UTC")
         delta = self.instante - fecha_hora
         return delta.total_seconds() / 3600.0
+    
+    def saltar_a(self, fecha_hora):
+        if fecha_hora.tzinfo is None:
+            raise ValueError("La fecha debe tener zona horaria UTC")
+        self.instante = fecha_hora.astimezone(timezone.utc)
 
     def copia(self):
         return Reloj(self.instante)

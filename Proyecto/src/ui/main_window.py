@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime, timezone
-from PySide6.QtCore import QDateTime, Qt
+from PySide6.QtCore import QDateTime, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -72,8 +72,36 @@ class VentanaPrincipal(QMainWindow):
         super().__init__()
         self.sistema = SistemaSismico()
         self._crear_ventana()
+        self._crear_timer_reloj()
         self.actualizar_vistas()
-
+    
+    def _crear_timer_reloj(self):
+        self.timer_reloj = QTimer(self)
+        self.timer_reloj.setInterval(1000)
+        self.timer_reloj.timeout.connect(self._tick_reloj)
+        self.timer_reloj.start()    
+        
+    def _tick_reloj(self):
+        self.sistema.reloj.avanzar(1)
+        self._actualizar_reloj()
+        
+    def saltar_reloj(self):
+        texto = self.campo_salto.dateTime().toString(
+            "yyyy-MM-dd HH:mm:ss"
+        )
+        fecha = datetime.strptime(
+            texto, "%Y-%m-%d %H:%M:%S"
+        ).replace(tzinfo=timezone.utc)
+        try:
+            self.sistema.saltar_reloj(fecha)
+            self.statusBar().showMessage(
+                f"Reloj saltó a {fecha.strftime('%Y-%m-%d %H:%M:%S')}",
+                4000,
+            )
+            self.actualizar_vistas()
+        except ValueError as error:
+            self._mostrar_error(str(error))
+        
     def _crear_ventana(self):
         self.setWindowTitle("SismoLab AVL")
         self.resize(1220, 780)
@@ -118,16 +146,63 @@ class VentanaPrincipal(QMainWindow):
         contenedor = QFrame()
         layout = QHBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
+
         textos = QVBoxLayout()
         textos.setSpacing(0)
         titulo = QLabel("SismoLab AVL")
-        titulo.setStyleSheet("font-size: 24px; font-weight: 700; color: #17324d;")
+        titulo.setStyleSheet(
+            "font-size: 24px; font-weight: 700; color: #17324d;"
+        )
         subtitulo = QLabel("Observatorio sismico")
         subtitulo.setStyleSheet("color: #52616f;")
         textos.addWidget(titulo)
         textos.addWidget(subtitulo)
         layout.addLayout(textos)
         layout.addStretch()
+        
+        self.boton_deshacer = QPushButton("Deshacer")
+        self.boton_deshacer.clicked.connect(self.deshacer)
+        self.boton_deshacer.setEnabled(False)
+        layout.addWidget(self.boton_deshacer)
+
+        self.campo_salto = QDateTimeEdit()
+        self.campo_salto.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.campo_salto.setCalendarPopup(True)
+        self.campo_salto.setDateTime(self._qdatetime_del_reloj())
+        self.campo_salto.setStyleSheet(
+            "QDateTimeEdit {"
+            "   background: white;"
+            "   color: #172b4d;"
+            "   border: 1px solid #cdd6df;"
+            "   border-radius: 4px;"
+            "   padding: 5px 8px;"
+            "   min-width: 170px;"
+            "}"
+            "QDateTimeEdit:focus {"
+            "   border: 1px solid #1967a8;"
+            "}"
+            "QDateTimeEdit::drop-down {"
+            "   subcontrol-origin: padding;"
+            "   subcontrol-position: center right;"
+            "   width: 20px;"
+            "   border-left: 1px solid #cdd6df;"
+            "   background: #e8eef4;"
+            "}"
+            "QDateTimeEdit::down-arrow {"
+            "   image: none;"
+            "   border-left: 4px solid transparent;"
+            "   border-right: 4px solid transparent;"
+            "   border-top: 6px solid #17324d;"
+            "   width: 0;"
+            "   height: 0;"
+            "}"
+        )
+        layout.addWidget(self.campo_salto)
+
+        self.boton_saltar = QPushButton("Saltar a esta hora")
+        self.boton_saltar.clicked.connect(self.saltar_reloj)
+        layout.addWidget(self.boton_saltar)
+
         self.etiqueta_reloj = QLabel()
         self.etiqueta_reloj.setStyleSheet(
             "background: #e1f1ed; color: #155d4a; padding: 7px 10px; "
@@ -436,6 +511,17 @@ class VentanaPrincipal(QMainWindow):
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
+            
+    def deshacer(self):
+        descripcion = self.sistema.descripcion_ultima_accion()
+        if descripcion is None:
+            self.statusBar().showMessage("No hay acciones para deshacer", 4000)
+            return
+        if not self.sistema.deshacer():
+            self.statusBar().showMessage("No se pudo deshacer", 4000)
+            return
+        self.statusBar().showMessage(f"Deshecho: {descripcion}", 4000)
+        self.actualizar_vistas()
 
     def eliminar_evento(self):
         event_id = self._id_seleccionado()
@@ -507,11 +593,24 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar_tabla_reportes()
         self._actualizar_mapa()
         self._actualizar_botones_evento()
+        self._actualizar_boton_deshacer()
+        
+    def _actualizar_boton_deshacer(self):
+        puede = self.sistema.puede_deshacer()
+        self.boton_deshacer.setEnabled(puede)
+        if puede:
+            descripcion = self.sistema.descripcion_ultima_accion()
+            self.boton_deshacer.setToolTip(f"Deshacer: {descripcion}")
+        else:
+            self.boton_deshacer.setToolTip("No hay acciones para deshacer")
 
     def _actualizar_reloj(self):
+        instante = self.sistema.reloj.instante
         self.etiqueta_reloj.setText(
-            "Reloj UTC: " + self.sistema.reloj.instante.strftime("%Y-%m-%d %H:%M:%S")
+            "Reloj UTC: " + instante.strftime("%Y-%m-%d %H:%M:%S")
         )
+        if not self.campo_salto.hasFocus():
+            self.campo_salto.setDateTime(self._qdatetime_del_reloj())
 
     def _actualizar_resumen(self):
         metricas = self.sistema.metricas
