@@ -131,6 +131,12 @@ class SistemaSismico:
         if event_id in self.ids_eliminados:
             return {"estado": "eliminado", "evento": None}
         return {"estado": "desconocido", "evento": None}
+    
+    def detalle_evento(self, id_event):
+        estado_evento = self.consultar_evento(id_event)
+        if estado_evento["estado"] == "activo":
+            pass
+        
 
     # === UPDATE ===
 

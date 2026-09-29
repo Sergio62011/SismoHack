@@ -31,6 +31,20 @@ class Node:
         left_h = self.left.height if self.left else -1
         right_h = self.right.height if self.right else -1
         self.height = 1 + max(left_h, right_h)
+        
+    def copia(self, nuevo_padre=None):
+        
+        nuevo = Node(self.event.copia())
+        nuevo.height = self.height
+        nuevo.parent = nuevo_padre
+
+        if self.left is not None:
+            nuevo.left = self.left.copia(nuevo_padre=nuevo)
+
+        if self.right is not None:
+            nuevo.right = self.right.copia(nuevo_padre=nuevo)
+
+        return nuevo
 
     @property
     def balance_factor(self):

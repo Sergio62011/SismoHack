@@ -425,11 +425,19 @@ class AVL:
         if abs(node.balance_factor) > 1:
             return False
         return self._is_avl(node.left) and self._is_avl(node.right)
+    
+    def copia(self):
+        
+        nuevo = AVL()
+        nuevo.modo_estres = self.modo_estres
+        nuevo.rotaciones_realizadas = self.rotaciones_realizadas
+        nuevo.rotaciones_ultima_operacion = list(self.rotaciones_ultima_operacion)
 
-    # =========================================================
-    # DEBUG DRAW
-    # =========================================================
+        if self.root is not None:
+            nuevo.root = self.root.copia(nuevo_padre=None)
 
+        return nuevo
+        
     def dibujar(self, mostrar_info=False):
         if self.root is None:
             print("El árbol está vacío")
