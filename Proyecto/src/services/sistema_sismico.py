@@ -594,3 +594,26 @@ class SistemaSismico:
         if abs(round(numero, 1) - numero) > 1e-9:
             raise ValueError(f"{nombre} admite como máximo un decimal")
         return numero
+    
+    def activar_modo_estres(self):
+        estado_antes = self._snapshot()
+        try:
+            self.avl.activar_modo_estres()
+            self.historial.registro_accion(
+                Accion("activar_modo_estres", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
+        
+    def desactivar_modo_estres(self):
+        estado_antes = self._snapshot()
+        try:
+            self.avl.desactivar_modo_estres()
+            self.avl.recuperar_balance()
+            self.historial.registro_accion(
+                Accion("desactivar_modo_estres_y_recuperar_balance", estado_antes)
+            )
+        except Exception:
+            self._restaurar(estado_antes)
+            raise

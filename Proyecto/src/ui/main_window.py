@@ -123,6 +123,9 @@ class VentanaPrincipal(QMainWindow):
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("Sistema listo")
+        self.statusBar().setStyleSheet(
+            "QStatusBar { background: #e8eef4; color: #172b4d; }"
+        )
         self.setStyleSheet(
             "QMainWindow { background: #f5f7fa; }"
             "QGroupBox { font-weight: 600; border: 1px solid #cdd6df; "
@@ -159,6 +162,21 @@ class VentanaPrincipal(QMainWindow):
         textos.addWidget(subtitulo)
         layout.addLayout(textos)
         layout.addStretch()
+        
+        self.boton_estres = QPushButton("Modo estres")
+        self.boton_estres.setCheckable(True)
+        self.boton_estres.toggled.connect(self._switch_modo_estres)
+        self.boton_estres.setStyleSheet(
+            "QPushButton {"
+            "   background: #1967a8; color: white;"
+            "   border: 0; border-radius: 4px;"
+            "   padding: 7px 11px;"
+            "}"
+            "QPushButton:checked {"
+            "   background: #c0392b;"
+            "}"
+        )
+        layout.addWidget(self.boton_estres)
         
         self.boton_deshacer = QPushButton("Deshacer")
         self.boton_deshacer.clicked.connect(self.deshacer)
@@ -522,6 +540,16 @@ class VentanaPrincipal(QMainWindow):
             return
         self.statusBar().showMessage(f"Deshecho: {descripcion}", 4000)
         self.actualizar_vistas()
+        
+    def _switch_modo_estres(self, activo):
+        if activo:
+            self.sistema.activar_modo_estres()
+            self.statusBar().showMessage("Modo estrés activado", 4000)
+        else:
+            self.sistema.desactivar_modo_estres()
+            self.statusBar().showMessage("Modo estrés desactivado", 4000)
+        self.actualizar_vistas()
+        
 
     def eliminar_evento(self):
         event_id = self._id_seleccionado()
