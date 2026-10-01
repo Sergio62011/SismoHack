@@ -542,13 +542,34 @@ class VentanaPrincipal(QMainWindow):
         self.actualizar_vistas()
         
     def _switch_modo_estres(self, activo):
-        if activo:
-            self.sistema.activar_modo_estres()
-            self.statusBar().showMessage("Modo estrés activado", 4000)
+        try:
+            if activo:
+                self.sistema.activar_modo_estres()
+                self.statusBar().showMessage("Modo estrés activado", 4000)
+            else:
+                costo = self.sistema.desactivar_modo_estres()
+                self.statusBar().showMessage(
+                    f"Balance recuperado: Altura de "
+                    f"{costo['altura_antes']} a {costo['altura_despues']}, se hicieron "
+                    f"{costo['giros']} giros, hubieron "
+                    f"{costo['nodos_visitados']} nodos visitados y  "
+                    f"{costo['pasadas']} pasadas",
+                    10000,
+                )
+            self.actualizar_vistas()
+        except ValueError as error:
+            self._mostrar_error(str(error))
+            self._actualizar_boton_estres()
+            
+    def _actualizar_boton_estres(self):
+        en_estres = self.sistema.en_modo_estres()
+        self.boton_estres.blockSignals(True)
+        self.boton_estres.setChecked(en_estres)
+        if en_estres:
+            self.boton_estres.setText("Modo estres: ACTIVO")
         else:
-            self.sistema.desactivar_modo_estres()
-            self.statusBar().showMessage("Modo estrés desactivado", 4000)
-        self.actualizar_vistas()
+            self.boton_estres.setText("Modo estres")
+        self.boton_estres.blockSignals(False)
         
 
     def eliminar_evento(self):
@@ -622,6 +643,7 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar_mapa()
         self._actualizar_botones_evento()
         self._actualizar_boton_deshacer()
+        self._actualizar_boton_estres()
         
     def _actualizar_boton_deshacer(self):
         puede = self.sistema.puede_deshacer()
@@ -781,10 +803,15 @@ class VentanaPrincipal(QMainWindow):
         def dibujar_nodos(nodo):
             if nodo is None:
                 return
+            
             x, y = posiciones[id(nodo)]
-            fondo, borde = colores_prioridad.get(
-                nodo.event.prioridad, ("#dcecf8", "#1967a8")
-            )
+            
+            if self.sistema.en_modo_estres():
+                fondo, borde = "#ffcccc", "#c0392b"
+            else:
+                fondo, borde = colores_prioridad.get(
+                    nodo.event.prioridad, ("#dcecf8", "#1967a8")
+                )
 
             self.escena_arbol.addEllipse(
                 x - radio, y - radio,

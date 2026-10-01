@@ -16,6 +16,8 @@ class AVL:
         self.modo_estres = False
         self.rotaciones_realizadas = 0
         self.rotaciones_ultima_operacion = []
+        self.pasadas_recuperacion = 0
+        self.nodos_visitados_recuperacion = 0
 
     # =========================================================
     # INSERT
@@ -376,11 +378,9 @@ class AVL:
     # =========================================================
 
     def recuperar_balance(self):
-        """
-        Global recovery. Rebuilds the tree by repeated local rotations
-        using a postorder pass. Repeats until AVL property holds.
-        """
         self.rotaciones_ultima_operacion = []
+        self.pasadas_recuperacion = 0
+        self.nodos_visitados_recuperacion = 0
         self.modo_estres = False
 
         if self.root is None:
@@ -391,6 +391,7 @@ class AVL:
         while passes < max_passes:
             self.root = self._recover_pass(self.root)
             self.root.parent = None
+            self.pasadas_recuperacion += 1
             if self._is_avl(self.root):
                 break
             passes += 1
@@ -400,6 +401,8 @@ class AVL:
     def _recover_pass(self, node):
         if node is None:
             return None
+
+        self.nodos_visitados_recuperacion += 1
 
         node.left = self._recover_pass(node.left)
         if node.left is not None:

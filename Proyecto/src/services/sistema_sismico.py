@@ -34,6 +34,7 @@ class SistemaSismico:
             "eventos_archivados": 0,
         }
         self.historial = Historial()
+        self.ultimo_costo_recuperacion = None
 
     @property
     def reloj(self):
@@ -609,11 +610,37 @@ class SistemaSismico:
     def desactivar_modo_estres(self):
         estado_antes = self._snapshot()
         try:
-            self.avl.desactivar_modo_estres()
+            altura_antes = self.avl.height()
             self.avl.recuperar_balance()
+            altura_despues = self.avl.height()
+
+            rotaciones = list(self.avl.rotaciones_ultima_operacion)
+            costo = {
+                "altura_antes": altura_antes,
+                "altura_despues": altura_despues,
+                "rotaciones": rotaciones,
+                "giros": self._contar_giros(rotaciones),
+                "pasadas": self.avl.pasadas_recuperacion,
+                "nodos_visitados": self.avl.nodos_visitados_recuperacion,
+            }
+            self.ultimo_costo_recuperacion = costo
             self.historial.registro_accion(
-                Accion("desactivar_modo_estres_y_recuperar_balance", estado_antes)
+                Accion("desactivar_modo_estres", estado_antes)
             )
+            return costo
         except Exception:
             self._restaurar(estado_antes)
             raise
+        
+    @staticmethod
+    def _contar_giros(rotaciones):
+        total = 0
+        for r in rotaciones:
+            if r in ("LL", "RR"):
+                total += 1
+            else:
+                total += 2
+        return total
+    
+    def en_modo_estres(self):
+        return self.avl.modo_estres
