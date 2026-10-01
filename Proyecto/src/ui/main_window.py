@@ -1,3 +1,4 @@
+from pathlib import Path
 import sys
 from datetime import datetime, timezone
 from PySide6.QtCore import QDateTime, Qt, QTimer
@@ -8,6 +9,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDateTimeEdit,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGraphicsScene,
@@ -35,6 +37,8 @@ from PySide6.QtWidgets import (
 from models.map import Zona
 from models.report import Reporte
 from services.sistema_sismico import SistemaSismico
+from persistence.json_loader import JsonLoader, ErrorJsonPersistencia
+from persistence.json_saver import JsonSaver
 
 class VistaArbolConZoom(QGraphicsView):
 
@@ -176,6 +180,19 @@ class VentanaPrincipal(QMainWindow):
             "   background: #c0392b;"
             "}"
         )
+                # --- Botones de persistencia ---
+        self.boton_guardar = QPushButton("Guardar JSON")
+        self.boton_guardar.clicked.connect(self.guardar_json)
+        layout.addWidget(self.boton_guardar)
+
+        self.boton_cargar_topologia = QPushButton("Cargar topología")
+        self.boton_cargar_topologia.clicked.connect(self.cargar_json_topologia)
+        layout.addWidget(self.boton_cargar_topologia)
+
+        self.boton_cargar_inserciones = QPushButton("Cargar inserciones")
+        self.boton_cargar_inserciones.clicked.connect(self.cargar_json_inserciones)
+        layout.addWidget(self.boton_cargar_inserciones)
+
         layout.addWidget(self.boton_estres)
         
         self.boton_deshacer = QPushButton("Deshacer")
@@ -879,6 +896,148 @@ class VentanaPrincipal(QMainWindow):
             )
         self.texto_resultado.setPlainText("\n\n".join(lineas))
         self.statusBar().showMessage("Procesamiento de reportes terminado", 4000)
+
+        # =========================================================
+    # PERSISTENCIA: guardar y cargar JSON
+    # =========================================================
+
+    def _data_dir(self):
+        """Devuelve la carpeta data/ del proyecto (crea si no existe)."""
+        # main_window.py está en src/ui/, así que subimos dos niveles
+        raiz = Path(__file__).resolve().parent.parent.parent
+        carpeta = raiz / "data"
+        carpeta.mkdir(exist_ok=True)
+        return carpeta
+
+    def guardar_json(self):
+        """Abre un diálogo para elegir dónde guardar el estado actual."""
+        ruta_sugerida = str(self._data_dir() / "sismolab_estado.json")
+        ruta, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar estado del sistema",
+            ruta_sugerida,
+            "Archivos JSON (*.json)",
+        )
+        if not ruta:
+            return  # usuario canceló
+
+        try:
+            destino = JsonSaver.guardar(self.sistema, ruta)
+            self.statusBar().showMessage(
+                f"Guardado en: {destino}", 6000
+            )
+            QMessageBox.information(
+                self, "Guardado exitoso",
+                f"Estado guardado en:\n{destino}",
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error al guardar",
+                f"No se pudo guardar el archivo:\n{e}",
+            )
+
+    def cargar_json_topologia(self):
+        """Abre un diálogo para cargar un JSON en modo topología."""
+        ruta, _ = QFileDialog.getOpenFileName(
+            self,
+            "Cargar topología desde JSON",
+            str(self._data_dir()),
+            "Archivos JSON (*.json)",
+        )
+        if not ruta:
+            return  # usuario canceló
+
+        try:
+            nuevo_sistema = JsonLoader.cargar_topologia(
+                ruta, sistema_actual=self.sistema
+            )
+        except ErrorJsonPersistencia as e:
+            QMessageBox.critical(
+                self, "JSON inválido",
+                f"El archivo no se pudo cargar:\n\n{e}\n\n"
+                f"El sistema actual no fue modificado.",
+            )
+            return
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error inesperado",
+                f"Ocurrió un error al cargar:\n{e}\n\n"
+                f"El sistema actual no fue modificado.",
+            )
+            return
+
+        # Carga exitosa: reemplazar el sistema y refrescar todo
+        self.sistema = nuevo_sistema
+        self.actualizar_vistas()
+        self.statusBar().showMessage(
+            f"Topología cargada desde: {ruta}", 6000
+        )
+        QMessageBox.information(
+            self, "Carga exitosa",
+            f"Se restauró el escenario desde:\n{ruta}\n\n"
+            f"Eventos activos: {self.sistema.avl.size()}\n"
+            f"Altura del AVL: {self.sistema.avl.height()}\n"
+            f"Modo estrés: {'activo' if self.sistema.en_modo_estres() else 'inactivo'}",
+        )
+
+    def cargar_json_inserciones(self):
+        """Abre un diálogo para cargar un JSON en modo inserciones.
+
+        Construye un AVL balanceado y un BST sin balanceo con la misma
+        secuencia, y muestra la comparación en un cuadro de diálogo.
+        """
+        ruta, _ = QFileDialog.getOpenFileName(
+            self,
+            "Cargar por inserciones desde JSON",
+            str(self._data_dir()),
+            "Archivos JSON (*.json)",
+        )
+        if not ruta:
+            return
+
+        try:
+            sistema_nuevo, bst = JsonLoader.cargar_por_inserciones(ruta)
+        except ErrorJsonPersistencia as e:
+            QMessageBox.critical(
+                self, "JSON inválido",
+                f"El archivo no se pudo cargar:\n\n{e}\n\n"
+                f"El sistema actual no fue modificado.",
+            )
+            return
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error inesperado",
+                f"Ocurrió un error al cargar:\n{e}",
+            )
+            return
+
+        # Reemplazar el sistema (el AVL) y mostrar comparación
+        self.sistema = sistema_nuevo
+        self.actualizar_vistas()
+
+        inorden_avl = [e.id_evento for e in sistema_nuevo.avl.in_order()]
+        inorden_bst = [e.id_evento for e in bst.in_order()]
+
+        mensaje = (
+            f"Archivo: {ruta}\n\n"
+            f"=== AVL (balanceado) ===\n"
+            f"  Altura:  {sistema_nuevo.avl.height()}\n"
+            f"  Nodos:   {sistema_nuevo.avl.size()}\n"
+            f"  Hojas:   {sistema_nuevo.avl.number_of_leaves()}\n"
+            f"  Raíz:    {sistema_nuevo.avl.root.event.id_evento if sistema_nuevo.avl.root else '-'}\n\n"
+            f"=== BST (sin balanceo) ===\n"
+            f"  Altura:  {bst.height()}\n"
+            f"  Nodos:   {bst.size()}\n"
+            f"  Hojas:   {bst.number_of_leaves()}\n"
+            f"  Raíz:    {bst.root.event.id_evento if bst.root else '-'}\n\n"
+            f"Inorden AVL == Inorden BST: "
+            f"{'SÍ' if inorden_avl == inorden_bst else 'NO'}"
+        )
+
+        QMessageBox.information(self, "Comparación AVL vs BST", mensaje)
+        self.statusBar().showMessage(
+            f"Inserciones cargadas desde: {ruta}", 6000
+        )
 
     def _mostrar_error(self, mensaje):
         QMessageBox.warning(self, "Dato no valido", mensaje)
