@@ -8,6 +8,7 @@ from models.map import MapaSismico
 from models.station import Estacion
 from structure.avl import AVL
 from services.historial import Accion, Historial
+from services.asociaciones import actualizar_asociaciones_de
 
 
 class SistemaSismico:
@@ -146,6 +147,7 @@ class SistemaSismico:
 
             self.avl.insert(evento)
             self._eventos_activos[event_id] = evento
+            actualizar_asociaciones_de(self, event_id)
 
             self.historial.registro_accion(
                 Accion(f"crear_evento {event_id}", estado_antes)
@@ -203,6 +205,7 @@ class SistemaSismico:
             self.avl.insert(evento)
             rotaciones.extend(self.avl.rotaciones_ultima_operacion)
             self.ultimas_rotaciones = rotaciones
+            actualizar_asociaciones_de(self, evento.id_evento)
 
             self.historial.registro_accion(
                 Accion(f"corregir_evento {evento.id_evento}", estado_antes)
@@ -235,6 +238,7 @@ class SistemaSismico:
             del self._eventos_activos[event_id]
             self.ids_eliminados.add(event_id)
             evento.ubicacion = "eliminado"
+            actualizar_asociaciones_de(self, event_id)
 
             self.historial.registro_accion(
                 Accion(f"eliminar_evento {event_id}", estado_antes)
@@ -281,6 +285,7 @@ class SistemaSismico:
         estado_antes = self._snapshot()
         try:
             self.parametros.set_w(valor)
+            actualizar_asociaciones_de(self)
             self.historial.registro_accion(
                 Accion(f"set_w {valor}", estado_antes)
             )
@@ -292,6 +297,7 @@ class SistemaSismico:
         estado_antes = self._snapshot()
         try:
             self.parametros.set_r(valor)
+            actualizar_asociaciones_de(self)
             self.historial.registro_accion(
                 Accion(f"set_r {valor}", estado_antes)
             )
@@ -399,6 +405,7 @@ class SistemaSismico:
                 self._eventos_activos[event_id] = archivado
                 del self._historicos[event_id]
                 self.metricas["reactivados"] += 1
+                actualizar_asociaciones_de(self, event_id)
                 return self._resultado(
                     "reactivado",
                     f"Evento {event_id} reactivado desde historico",
@@ -429,6 +436,7 @@ class SistemaSismico:
             self.avl.insert(nuevo)
             self._eventos_activos[event_id] = nuevo
             self.metricas["creados_por_reporte"] += 1
+            actualizar_asociaciones_de(self, event_id)
             return self._resultado(
                 "creado", f"Evento {event_id} creado desde reporte", nuevo
             )
@@ -445,6 +453,7 @@ class SistemaSismico:
             self.avl.insert(evento)
             rotaciones.extend(self.avl.rotaciones_ultima_operacion)
             self.metricas["correcciones_aceptadas"] += 1
+            actualizar_asociaciones_de(self, event_id)
             return self._resultado(
                 "corregido",
                 f"Evento {event_id} corregido con una revision mayor",
