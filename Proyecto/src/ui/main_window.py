@@ -80,24 +80,39 @@ class VentanaPrincipal(QMainWindow):
     def __init__(self):
         super().__init__()
         self.sistema = SistemaSismico()
-        # [FIX] Guardar las versiones dentro de data/versiones/
         self.gestor_versiones = GestorVersiones(
             self._data_dir()
         )
         self._crear_ventana()
         self._crear_timer_reloj()
+        self._crear_timer_procesamiento()
         self.actualizar_vistas()
-    
+
     def _crear_timer_reloj(self):
         self.timer_reloj = QTimer(self)
         self.timer_reloj.setInterval(1000)
         self.timer_reloj.timeout.connect(self._tick_reloj)
-        self.timer_reloj.start()    
-        
+        self.timer_reloj.start()
+
     def _tick_reloj(self):
         self.sistema.reloj.avanzar(1)
         self._actualizar_reloj()
-        
+    
+    def _crear_timer_procesamiento(self):
+        self.timer_procesamiento = QTimer(self)
+        self.timer_procesamiento.setInterval(800)
+        self.timer_procesamiento.timeout.connect(self._procesar_un_paso)
+
+    def _procesar_un_paso(self):
+        if not self.sistema.hay_reportes_pendientes():
+            self.timer_procesamiento.stop()
+            self.boton_procesar_todos.setText("Procesar toda la cola")
+            self.statusBar().showMessage("Cola vacía", 3000)
+            return
+        resultado = self.sistema.procesar_siguiente_reporte()
+        self._mostrar_resultados([resultado])
+        self.actualizar_vistas()
+
     def saltar_reloj(self):
         texto = self.campo_salto.dateTime().toString(
             "yyyy-MM-dd HH:mm:ss"
@@ -114,7 +129,7 @@ class VentanaPrincipal(QMainWindow):
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
-        
+
     def _crear_ventana(self):
         self.setWindowTitle("SismoLab AVL")
         self.resize(1220, 780)
@@ -140,6 +155,13 @@ class VentanaPrincipal(QMainWindow):
         self.statusBar().setStyleSheet(
             "QStatusBar { background: #e8eef4; color: #172b4d; }"
         )
+
+        self.etiqueta_modo = QLabel("Modo: normal")
+        self.etiqueta_modo.setStyleSheet(
+            "color: #52616f; padding-right: 10px;"
+        )
+        self.statusBar().addPermanentWidget(self.etiqueta_modo)
+
         self.setStyleSheet(
             "QMainWindow { background: #f5f7fa; }"
             "QGroupBox { font-weight: 600; border: 1px solid #cdd6df; "
@@ -177,7 +199,6 @@ class VentanaPrincipal(QMainWindow):
         layout.addLayout(textos)
         layout.addStretch()
 
-        # --- Botones de persistencia JSON ---
         self.boton_guardar = QPushButton("Guardar JSON")
         self.boton_guardar.clicked.connect(self.guardar_json)
         layout.addWidget(self.boton_guardar)
@@ -190,7 +211,6 @@ class VentanaPrincipal(QMainWindow):
         self.boton_cargar_inserciones.clicked.connect(self.cargar_json_inserciones)
         layout.addWidget(self.boton_cargar_inserciones)
 
-        # --- Modo estrés ---
         self.boton_estres = QPushButton("Modo estres")
         self.boton_estres.setCheckable(True)
         self.boton_estres.toggled.connect(self._switch_modo_estres)
@@ -206,13 +226,11 @@ class VentanaPrincipal(QMainWindow):
         )
         layout.addWidget(self.boton_estres)
 
-        # --- Deshacer ---
         self.boton_deshacer = QPushButton("Deshacer")
         self.boton_deshacer.clicked.connect(self.deshacer)
         self.boton_deshacer.setEnabled(False)
         layout.addWidget(self.boton_deshacer)
 
-        # --- Reloj ---
         self.campo_salto = QDateTimeEdit()
         self.campo_salto.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.campo_salto.setCalendarPopup(True)
@@ -304,7 +322,6 @@ class VentanaPrincipal(QMainWindow):
         ayuda.setStyleSheet("color: #52616f;")
         arbol_layout.addWidget(ayuda)
 
-        # Barra de herramientas del árbol
         barra_arbol = QHBoxLayout()
         boton_zoom_in = QPushButton("Zoom +")
         boton_zoom_out = QPushButton("Zoom -")
@@ -396,10 +413,10 @@ class VentanaPrincipal(QMainWindow):
         acciones = QHBoxLayout()
         boton_uno = QPushButton("Procesar siguiente")
         boton_uno.clicked.connect(self.procesar_siguiente_reporte)
-        boton_todos = QPushButton("Procesar toda la cola")
-        boton_todos.clicked.connect(self.procesar_todos_los_reportes)
+        self.boton_procesar_todos = QPushButton("Procesar toda la cola")
+        self.boton_procesar_todos.clicked.connect(self.procesar_todos_los_reportes)
         acciones.addWidget(boton_uno)
-        acciones.addWidget(boton_todos)
+        acciones.addWidget(self.boton_procesar_todos)
         acciones.addStretch()
         cola_layout.addLayout(acciones)
         panel_layout.addWidget(grupo_cola, 1)
@@ -617,8 +634,11 @@ class VentanaPrincipal(QMainWindow):
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
-            
+
     def deshacer(self):
+        if self.timer_procesamiento.isActive():
+            self.timer_procesamiento.stop()
+            self.boton_procesar_todos.setText("Procesar toda la cola")
         descripcion = self.sistema.descripcion_ultima_accion()
         if descripcion is None:
             self.statusBar().showMessage("No hay acciones para deshacer", 4000)
@@ -628,19 +648,26 @@ class VentanaPrincipal(QMainWindow):
             return
         self.statusBar().showMessage(f"Deshecho: {descripcion}", 4000)
         self.actualizar_vistas()
-        
+
     def _switch_modo_estres(self, activo):
         try:
             if activo:
                 self.sistema.activar_modo_estres()
                 self.statusBar().showMessage("Modo estrés activado", 4000)
             else:
+                pausado = False
+                if self.timer_procesamiento.isActive():
+                    self.timer_procesamiento.stop()
+                    self.boton_procesar_todos.setText("Procesar toda la cola")
+                    pausado = True
+
                 costo = self.sistema.desactivar_modo_estres()
+                prefijo = "Procesamiento pausado. " if pausado else ""
                 self.statusBar().showMessage(
-                    f"Balance recuperado: Altura de "
-                    f"{costo['altura_antes']} a {costo['altura_despues']}, se hicieron "
-                    f"{costo['giros']} giros, hubieron "
-                    f"{costo['nodos_visitados']} nodos visitados y  "
+                    f"{prefijo}Balance recuperado: Altura de "
+                    f"{costo['altura_antes']} a {costo['altura_despues']}, "
+                    f"{costo['giros']} giros, "
+                    f"{costo['nodos_visitados']} nodos visitados, "
                     f"{costo['pasadas']} pasadas",
                     10000,
                 )
@@ -648,7 +675,7 @@ class VentanaPrincipal(QMainWindow):
         except ValueError as error:
             self._mostrar_error(str(error))
             self._actualizar_boton_estres()
-            
+
     def _actualizar_boton_estres(self):
         en_estres = self.sistema.en_modo_estres()
         self.boton_estres.blockSignals(True)
@@ -658,7 +685,18 @@ class VentanaPrincipal(QMainWindow):
         else:
             self.boton_estres.setText("Modo estres")
         self.boton_estres.blockSignals(False)
-        
+
+    def _actualizar_indicador_modo(self):
+        if self.sistema.en_modo_estres():
+            self.etiqueta_modo.setText("Modo: ESTRÉS")
+            self.etiqueta_modo.setStyleSheet(
+                "color: #c0392b; font-weight: 600; padding-right: 10px;"
+            )
+        else:
+            self.etiqueta_modo.setText("Modo: normal")
+            self.etiqueta_modo.setStyleSheet(
+                "color: #52616f; padding-right: 10px;"
+            )
 
     def eliminar_evento(self):
         event_id = self._id_seleccionado()
@@ -694,11 +732,17 @@ class VentanaPrincipal(QMainWindow):
         self.actualizar_vistas()
 
     def procesar_todos_los_reportes(self):
-        resultados = self.sistema.procesar_continuo()
-        if not resultados:
-            resultados = [{"decision": "cola_vacia", "mensaje": "No hay reportes pendientes", "rotaciones": []}]
-        self._mostrar_resultados(resultados)
-        self.actualizar_vistas()
+        if self.timer_procesamiento.isActive():
+            self.timer_procesamiento.stop()
+            self.boton_procesar_todos.setText("Procesar toda la cola")
+            self.statusBar().showMessage("Procesamiento pausado", 3000)
+            return
+        if not self.sistema.hay_reportes_pendientes():
+            self.statusBar().showMessage("No hay reportes pendientes", 3000)
+            return
+        self.timer_procesamiento.start()
+        self.boton_procesar_todos.setText("Pausar procesamiento")
+        self.statusBar().showMessage("Procesando cola...", 3000)
 
     def agregar_zona(self):
         nombre = self.nombre_zona.text().strip()
@@ -732,8 +776,9 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar_botones_evento()
         self._actualizar_boton_deshacer()
         self._actualizar_boton_estres()
+        self._actualizar_indicador_modo()
         self._actualizar_tabla_versiones()
-        
+
     def _actualizar_boton_deshacer(self):
         puede = self.sistema.puede_deshacer()
         self.boton_deshacer.setEnabled(puede)
@@ -896,14 +941,12 @@ class VentanaPrincipal(QMainWindow):
 
         asignar_posiciones(raiz, 0, margen_x, ancho_total - margen_x)
 
-        # Colores por prioridad
         colores_prioridad = {
-            3: ("#fdecea", "#c0392b"),  # alta
-            2: ("#fef5e7", "#b9770e"),  # media
-            1: ("#eafaf1", "#1e8449"),  # baja
+            3: ("#fdecea", "#c0392b"),
+            2: ("#fef5e7", "#b9770e"),
+            1: ("#eafaf1", "#1e8449"),
         }
 
-        # Enlaces con curvas suaves
         enlace_pen = QPen(QColor("#8aa0b8"), 2)
         enlace_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
 
@@ -927,15 +970,14 @@ class VentanaPrincipal(QMainWindow):
 
         dibujar_enlaces(raiz)
 
-        # Nodos redondos con ID y prioridad
         def dibujar_nodos(nodo):
             if nodo is None:
                 return
-            
+
             x, y = posiciones[id(nodo)]
-            
+    
             if self.sistema.en_modo_estres():
-                fondo, borde = "#ffcccc", "#c0392b"
+                fondo, borde = "#c3c3c3", "#ae6c65"
             else:
                 fondo, borde = colores_prioridad.get(
                     nodo.event.prioridad, ("#dcecf8", "#1967a8")
@@ -965,13 +1007,11 @@ class VentanaPrincipal(QMainWindow):
 
         dibujar_nodos(raiz)
 
-        # Margen generoso abajo para que no se corten las hojas
         rectangulo = self.escena_arbol.itemsBoundingRect().adjusted(
             -60, -40, 60, 120
         )
         self.escena_arbol.setSceneRect(rectangulo)
-        # No llamamos a fitInView: el scroll aparece cuando hace falta.
-        
+
     def _reset_vista_arbol(self):
         self.vista_arbol.resetTransform()
         rect = self.escena_arbol.itemsBoundingRect().adjusted(
@@ -1046,8 +1086,6 @@ class VentanaPrincipal(QMainWindow):
 
         estado_antes = self.sistema._snapshot()
         try:
-            # [FIX] Pasar sistema_actual para que el loader haga rollback
-            # automático si algo falla durante la carga
             nuevo_sistema = self.gestor_versiones.restaurar(
                 nombre, sistema_actual=self.sistema
             )
@@ -1086,21 +1124,19 @@ class VentanaPrincipal(QMainWindow):
         self.statusBar().showMessage(
             f"Versión '{nombre}' eliminada", 5000
         )
-
-        # =========================================================
+        
+    # =========================================================
     # PERSISTENCIA: guardar y cargar JSON
     # =========================================================
 
     @staticmethod
     def _data_dir():
-        """Devuelve la carpeta data/ del proyecto (crea si no existe)."""
         raiz = Path(__file__).resolve().parent.parent.parent
         carpeta = raiz / "data"
         carpeta.mkdir(exist_ok=True)
         return carpeta
 
     def guardar_json(self):
-        """Abre un diálogo para elegir dónde guardar el estado actual."""
         ruta_sugerida = str(self._data_dir() / "sismolab_estado.json")
         ruta, _ = QFileDialog.getSaveFileName(
             self,
@@ -1109,7 +1145,7 @@ class VentanaPrincipal(QMainWindow):
             "Archivos JSON (*.json)",
         )
         if not ruta:
-            return  # usuario canceló
+            return
 
         try:
             destino = JsonSaver.guardar(self.sistema, ruta)
@@ -1127,7 +1163,6 @@ class VentanaPrincipal(QMainWindow):
             )
 
     def cargar_json_topologia(self):
-        """Abre un diálogo para cargar un JSON en modo topología."""
         ruta, _ = QFileDialog.getOpenFileName(
             self,
             "Cargar topología desde JSON",
@@ -1135,7 +1170,7 @@ class VentanaPrincipal(QMainWindow):
             "Archivos JSON (*.json)",
         )
         if not ruta:
-            return  # usuario canceló
+            return
 
         try:
             nuevo_sistema = JsonLoader.cargar_topologia(
@@ -1156,7 +1191,6 @@ class VentanaPrincipal(QMainWindow):
             )
             return
 
-        # Carga exitosa: reemplazar el sistema y refrescar todo
         self.sistema = nuevo_sistema
         self.actualizar_vistas()
         self.statusBar().showMessage(
@@ -1171,11 +1205,6 @@ class VentanaPrincipal(QMainWindow):
         )
 
     def cargar_json_inserciones(self):
-        """Abre un diálogo para cargar un JSON en modo inserciones.
-
-        Construye un AVL balanceado y un BST sin balanceo con la misma
-        secuencia, y muestra la comparación en un cuadro de diálogo.
-        """
         ruta, _ = QFileDialog.getOpenFileName(
             self,
             "Cargar por inserciones desde JSON",
@@ -1201,7 +1230,6 @@ class VentanaPrincipal(QMainWindow):
             )
             return
 
-        # Reemplazar el sistema (el AVL) y mostrar comparación
         self.sistema = sistema_nuevo
         self.actualizar_vistas()
 
