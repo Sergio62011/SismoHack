@@ -37,8 +37,13 @@ from PySide6.QtWidgets import (
 from models.map import Zona
 from models.report import Reporte
 from services.sistema_sismico import SistemaSismico
+from services.historial import Accion
 from persistence.json_loader import JsonLoader, ErrorJsonPersistencia
 from persistence.json_saver import JsonSaver
+from persistence.versiones import (
+    ErrorVersionesPersistentes,
+    GestorVersiones,
+)
 
 class VistaArbolConZoom(QGraphicsView):
 
@@ -75,6 +80,10 @@ class VentanaPrincipal(QMainWindow):
     def __init__(self):
         super().__init__()
         self.sistema = SistemaSismico()
+        # [FIX] Guardar las versiones dentro de data/versiones/
+        self.gestor_versiones = GestorVersiones(
+            self._data_dir()
+        )
         self._crear_ventana()
         self._crear_timer_reloj()
         self.actualizar_vistas()
@@ -122,6 +131,7 @@ class VentanaPrincipal(QMainWindow):
         pestanas.addTab(self._crear_eventos(), "Eventos")
         pestanas.addTab(self._crear_reportes(), "Reportes")
         pestanas.addTab(self._crear_mapa(), "Mapa y zonas")
+        pestanas.addTab(self._crear_versiones(), "Versiones")
         layout.addWidget(pestanas, 1)
 
         self.setCentralWidget(central)
@@ -166,7 +176,21 @@ class VentanaPrincipal(QMainWindow):
         textos.addWidget(subtitulo)
         layout.addLayout(textos)
         layout.addStretch()
-        
+
+        # --- Botones de persistencia JSON ---
+        self.boton_guardar = QPushButton("Guardar JSON")
+        self.boton_guardar.clicked.connect(self.guardar_json)
+        layout.addWidget(self.boton_guardar)
+
+        self.boton_cargar_topologia = QPushButton("Cargar topología")
+        self.boton_cargar_topologia.clicked.connect(self.cargar_json_topologia)
+        layout.addWidget(self.boton_cargar_topologia)
+
+        self.boton_cargar_inserciones = QPushButton("Cargar inserciones")
+        self.boton_cargar_inserciones.clicked.connect(self.cargar_json_inserciones)
+        layout.addWidget(self.boton_cargar_inserciones)
+
+        # --- Modo estrés ---
         self.boton_estres = QPushButton("Modo estres")
         self.boton_estres.setCheckable(True)
         self.boton_estres.toggled.connect(self._switch_modo_estres)
@@ -180,26 +204,15 @@ class VentanaPrincipal(QMainWindow):
             "   background: #c0392b;"
             "}"
         )
-                # --- Botones de persistencia ---
-        self.boton_guardar = QPushButton("Guardar JSON")
-        self.boton_guardar.clicked.connect(self.guardar_json)
-        layout.addWidget(self.boton_guardar)
-
-        self.boton_cargar_topologia = QPushButton("Cargar topología")
-        self.boton_cargar_topologia.clicked.connect(self.cargar_json_topologia)
-        layout.addWidget(self.boton_cargar_topologia)
-
-        self.boton_cargar_inserciones = QPushButton("Cargar inserciones")
-        self.boton_cargar_inserciones.clicked.connect(self.cargar_json_inserciones)
-        layout.addWidget(self.boton_cargar_inserciones)
-
         layout.addWidget(self.boton_estres)
-        
+
+        # --- Deshacer ---
         self.boton_deshacer = QPushButton("Deshacer")
         self.boton_deshacer.clicked.connect(self.deshacer)
         self.boton_deshacer.setEnabled(False)
         layout.addWidget(self.boton_deshacer)
 
+        # --- Reloj ---
         self.campo_salto = QDateTimeEdit()
         self.campo_salto.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.campo_salto.setCalendarPopup(True)
@@ -449,6 +462,64 @@ class VentanaPrincipal(QMainWindow):
         layout.addWidget(division)
         return pagina
 
+    def _crear_versiones(self):
+        pagina = QWidget()
+        division = QSplitter(Qt.Orientation.Horizontal)
+
+        guardar = QGroupBox("Guardar versión")
+        guardar_layout = QVBoxLayout(guardar)
+        ayuda = QLabel(
+            "Una versión conserva todo el estado operativo, incluida la "
+            "topología AVL, histórico, cola, reloj, parámetros y métricas."
+        )
+        ayuda.setWordWrap(True)
+        ayuda.setStyleSheet("color: #52616f;")
+        guardar_layout.addWidget(ayuda)
+
+        form = QFormLayout()
+        self.campo_nombre_version = QLineEdit()
+        self.campo_nombre_version.setPlaceholderText("Ej. Antes de la ráfaga")
+        form.addRow("Nombre", self.campo_nombre_version)
+        guardar_layout.addLayout(form)
+        boton_guardar_version = QPushButton("Guardar versión")
+        boton_guardar_version.clicked.connect(self.guardar_version)
+        guardar_layout.addWidget(boton_guardar_version)
+        ruta = QLabel(f"Carpeta: {self.gestor_versiones.directorio}")
+        ruta.setWordWrap(True)
+        ruta.setStyleSheet("color: #52616f;")
+        guardar_layout.addWidget(ruta)
+        guardar_layout.addStretch()
+
+        panel = QWidget()
+        panel_layout = QVBoxLayout(panel)
+        listado = QGroupBox("Versiones guardadas")
+        listado_layout = QVBoxLayout(listado)
+        self.tabla_versiones = self._crear_tabla(
+            ["Nombre", "Fecha UTC", "Activos", "Históricos", "Altura", "Modo"]
+        )
+        self.tabla_versiones.itemSelectionChanged.connect(
+            self._actualizar_botones_versiones
+        )
+        listado_layout.addWidget(self.tabla_versiones)
+        acciones = QHBoxLayout()
+        self.boton_restaurar_version = QPushButton("Restaurar versión")
+        self.boton_restaurar_version.clicked.connect(self.restaurar_version)
+        self.boton_eliminar_version = QPushButton("Eliminar versión")
+        self.boton_eliminar_version.setStyleSheet("background: #ae3e3e;")
+        self.boton_eliminar_version.clicked.connect(self.eliminar_version)
+        acciones.addWidget(self.boton_restaurar_version)
+        acciones.addWidget(self.boton_eliminar_version)
+        acciones.addStretch()
+        listado_layout.addLayout(acciones)
+        panel_layout.addWidget(listado, 1)
+
+        division.addWidget(guardar)
+        division.addWidget(panel)
+        division.setSizes([330, 780])
+        layout = QVBoxLayout(pagina)
+        layout.addWidget(division)
+        return pagina
+
     def _crear_formulario(self, layout, incluir_revision=False):
         form = QFormLayout()
         campos = {
@@ -661,6 +732,7 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar_botones_evento()
         self._actualizar_boton_deshacer()
         self._actualizar_boton_estres()
+        self._actualizar_tabla_versiones()
         
     def _actualizar_boton_deshacer(self):
         puede = self.sistema.puede_deshacer()
@@ -670,6 +742,45 @@ class VentanaPrincipal(QMainWindow):
             self.boton_deshacer.setToolTip(f"Deshacer: {descripcion}")
         else:
             self.boton_deshacer.setToolTip("No hay acciones para deshacer")
+
+    def _actualizar_tabla_versiones(self):
+        try:
+            versiones = self.gestor_versiones.listar()
+        except ErrorVersionesPersistentes as error:
+            self.tabla_versiones.setRowCount(0)
+            self.statusBar().showMessage(f"Catálogo de versiones inválido: {error}", 8000)
+            self._actualizar_botones_versiones()
+            return
+
+        self.tabla_versiones.setRowCount(len(versiones))
+        for fila, version in enumerate(versiones):
+            valores = [
+                version["name"],
+                version["created_at"].replace("T", " ").replace("Z", ""),
+                version["active_events"],
+                version["historical_events"],
+                version["avl_height"],
+                "Estrés" if version["stress_mode"] else "Normal",
+            ]
+            for columna, valor in enumerate(valores):
+                item = QTableWidgetItem(str(valor))
+                item.setForeground(QBrush(QColor("#172b4d")))
+                if columna == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, version["name"])
+                self.tabla_versiones.setItem(fila, columna, item)
+        self._actualizar_botones_versiones()
+
+    def _actualizar_botones_versiones(self):
+        seleccionada = self._version_seleccionada() is not None
+        self.boton_restaurar_version.setEnabled(seleccionada)
+        self.boton_eliminar_version.setEnabled(seleccionada)
+
+    def _version_seleccionada(self):
+        fila = self.tabla_versiones.currentRow()
+        if fila < 0:
+            return None
+        item = self.tabla_versiones.item(fila, 0)
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     def _actualizar_reloj(self):
         instante = self.sistema.reloj.instante
@@ -897,13 +1008,92 @@ class VentanaPrincipal(QMainWindow):
         self.texto_resultado.setPlainText("\n\n".join(lineas))
         self.statusBar().showMessage("Procesamiento de reportes terminado", 4000)
 
+    # =========================================================
+    # PERSISTENT VERSIONS
+    # =========================================================
+
+    def guardar_version(self):
+        nombre = self.campo_nombre_version.text()
+        try:
+            version = self.gestor_versiones.guardar(nombre, self.sistema)
+        except ErrorVersionesPersistentes as error:
+            self._mostrar_error(str(error))
+            return
+        except ValueError as error:
+            self._mostrar_error(str(error))
+            return
+
+        self.campo_nombre_version.clear()
+        self.actualizar_vistas()
+        self.statusBar().showMessage(
+            f"Versión '{version['name']}' guardada", 5000
+        )
+
+    def restaurar_version(self):
+        nombre = self._version_seleccionada()
+        if nombre is None:
+            return
+        respuesta = QMessageBox.question(
+            self,
+            "Restaurar versión",
+            f"Se reemplazará el estado actual por la versión '{nombre}'.\n"
+            "Podrás deshacer esta restauración.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if respuesta != QMessageBox.StandardButton.Yes:
+            return
+
+        estado_antes = self.sistema._snapshot()
+        try:
+            # [FIX] Pasar sistema_actual para que el loader haga rollback
+            # automático si algo falla durante la carga
+            nuevo_sistema = self.gestor_versiones.restaurar(
+                nombre, sistema_actual=self.sistema
+            )
+        except ErrorVersionesPersistentes as error:
+            self._mostrar_error(str(error))
+            return
+
+        nuevo_sistema.historial.registro_accion(
+            Accion(f"restaurar_version {nombre}", estado_antes)
+        )
+        self.sistema = nuevo_sistema
+        self.actualizar_vistas()
+        self.statusBar().showMessage(
+            f"Versión '{nombre}' restaurada", 5000
+        )
+
+    def eliminar_version(self):
+        nombre = self._version_seleccionada()
+        if nombre is None:
+            return
+        respuesta = QMessageBox.question(
+            self,
+            "Eliminar versión",
+            f"La versión '{nombre}' se eliminará permanentemente.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if respuesta != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.gestor_versiones.eliminar(nombre)
+        except ErrorVersionesPersistentes as error:
+            self._mostrar_error(str(error))
+            return
+        self.actualizar_vistas()
+        self.statusBar().showMessage(
+            f"Versión '{nombre}' eliminada", 5000
+        )
+
         # =========================================================
     # PERSISTENCIA: guardar y cargar JSON
     # =========================================================
 
-    def _data_dir(self):
+    @staticmethod
+    def _data_dir():
         """Devuelve la carpeta data/ del proyecto (crea si no existe)."""
-        # main_window.py está en src/ui/, así que subimos dos niveles
         raiz = Path(__file__).resolve().parent.parent.parent
         carpeta = raiz / "data"
         carpeta.mkdir(exist_ok=True)
