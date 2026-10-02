@@ -205,6 +205,7 @@ def archivar_rama(sistema):
 
         sistema.metricas["archivos_masivos"] += 1
         sistema.metricas["eventos_archivados"] += len(eventos)
+        sistema.actualizar_marcas_acceso_costoso()
 
         sistema.historial.registro_accion(
             Accion(

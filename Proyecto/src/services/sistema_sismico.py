@@ -98,6 +98,7 @@ class SistemaSismico:
         self.escenario = snapshot["escenario"]
         self.avl.modo_estres = snapshot["modo_estres"]
         self.metricas = snapshot["metricas"]
+        self.actualizar_marcas_acceso_costoso()
 
     def deshacer(self):
         accion = self.historial.deshacer()
@@ -148,6 +149,7 @@ class SistemaSismico:
             self.avl.insert(evento)
             self._eventos_activos[event_id] = evento
             actualizar_asociaciones_de(self, event_id)
+            self.actualizar_marcas_acceso_costoso()
 
             self.historial.registro_accion(
                 Accion(f"crear_evento {event_id}", estado_antes)
@@ -206,6 +208,7 @@ class SistemaSismico:
             rotaciones.extend(self.avl.rotaciones_ultima_operacion)
             self.ultimas_rotaciones = rotaciones
             actualizar_asociaciones_de(self, evento.id_evento)
+            self.actualizar_marcas_acceso_costoso()
 
             self.historial.registro_accion(
                 Accion(f"corregir_evento {evento.id_evento}", estado_antes)
@@ -239,6 +242,7 @@ class SistemaSismico:
             self.ids_eliminados.add(event_id)
             evento.ubicacion = "eliminado"
             actualizar_asociaciones_de(self, event_id)
+            self.actualizar_marcas_acceso_costoso()
 
             self.historial.registro_accion(
                 Accion(f"eliminar_evento {event_id}", estado_antes)
@@ -309,6 +313,8 @@ class SistemaSismico:
         estado_antes = self._snapshot()
         try:
             self.parametros.set_l(valor)
+            self.actualizar_marcas_acceso_costoso()
+            
             self.historial.registro_accion(
                 Accion(f"set_l {valor}", estado_antes)
             )
@@ -406,6 +412,8 @@ class SistemaSismico:
                 del self._historicos[event_id]
                 self.metricas["reactivados"] += 1
                 actualizar_asociaciones_de(self, event_id)
+                self.actualizar_marcas_acceso_costoso()
+                
                 return self._resultado(
                     "reactivado",
                     f"Evento {event_id} reactivado desde historico",
@@ -437,6 +445,8 @@ class SistemaSismico:
             self._eventos_activos[event_id] = nuevo
             self.metricas["creados_por_reporte"] += 1
             actualizar_asociaciones_de(self, event_id)
+            self.actualizar_marcas_acceso_costoso()
+            
             return self._resultado(
                 "creado", f"Evento {event_id} creado desde reporte", nuevo
             )
@@ -454,6 +464,8 @@ class SistemaSismico:
             rotaciones.extend(self.avl.rotaciones_ultima_operacion)
             self.metricas["correcciones_aceptadas"] += 1
             actualizar_asociaciones_de(self, event_id)
+            self.actualizar_marcas_acceso_costoso()
+            
             return self._resultado(
                 "corregido",
                 f"Evento {event_id} corregido con una revision mayor",
@@ -633,6 +645,7 @@ class SistemaSismico:
                 "nodos_visitados": self.avl.nodos_visitados_recuperacion,
             }
             self.ultimo_costo_recuperacion = costo
+            self.actualizar_marcas_acceso_costoso()
             self.historial.registro_accion(
                 Accion("desactivar_modo_estres", estado_antes)
             )
@@ -653,3 +666,70 @@ class SistemaSismico:
     
     def en_modo_estres(self):
         return self.avl.modo_estres
+    
+    def actualizar_marcas_acceso_costoso(self):
+        for evento in self._eventos_activos.values():
+            clave = evento.calcular_clave()
+            profundidad = self.avl.node_depth(clave)
+            if profundidad < 0:
+                evento.acceso_costoso = False
+                continue
+            evento.acceso_costoso = (
+                evento.prioridad == 3
+                and profundidad > self.parametros.l
+            )
+
+    def nodos_visitados_en_busqueda(self, id_evento):
+        evento = self._obtener_activo(id_evento)
+        clave = evento.calcular_clave()
+        profundidad = self.avl.node_depth(clave)
+        if profundidad < 0:
+            return 0
+        return profundidad + 1
+
+    def eventos_con_acceso_costoso(self):
+        resultado = []
+        for evento in self._eventos_activos.values():
+            if not evento.acceso_costoso:
+                continue
+            clave = evento.calcular_clave()
+            profundidad = self.avl.node_depth(clave)
+            resultado.append({
+                "evento": evento,
+                "profundidad": profundidad,
+                "limite": self.parametros.l,
+                "nodos_visitados": (
+                    profundidad + 1 if profundidad >= 0 else 0
+                ),
+            })
+        return resultado
+    
+    def agregar_zona(self, zona):
+        estado_antes = self._snapshot()
+        try:
+            self.mapa.agregar_zona(zona)
+
+            afectados = 0
+            for evento in list(self._eventos_activos.values()):
+                if not zona.contiene_punto(evento.x, evento.y):
+                    continue
+                prioridad_vieja = evento.prioridad
+                self.mapa.asignar_zona_a_evento(evento)
+                if evento.prioridad != prioridad_vieja:
+                    clave_vieja = (
+                        prioridad_vieja, evento.magnitud, evento.id_evento
+                    )
+                    self.avl.delete(clave_vieja)
+                    self.avl.insert(evento)
+                    afectados += 1
+
+            actualizar_asociaciones_de(self)
+            self.actualizar_marcas_acceso_costoso()
+
+            self.historial.registro_accion(
+                Accion(f"agregar_zona {zona.nombre}", estado_antes)
+            )
+            return afectados
+        except Exception:
+            self._restaurar(estado_antes)
+            raise

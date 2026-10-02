@@ -96,6 +96,8 @@ class JsonLoader:
             sistema.metricas = ejecucion["metrics"]
             sistema.ultimas_rotaciones = ejecucion["last_rotations"]
             sistema.ultimo_costo_recuperacion = ejecucion["last_recovery_cost"]
+            sistema.actualizar_marcas_acceso_costoso()
+            
             return sistema
 
         except Exception:
@@ -139,6 +141,8 @@ class JsonLoader:
             sistema.avl.insert(evento)
             sistema._eventos_activos[evento.id_evento] = evento
             bst.insert(evento.copia())
+        
+        sistema.actualizar_marcas_acceso_costoso()
 
         return sistema, bst
 

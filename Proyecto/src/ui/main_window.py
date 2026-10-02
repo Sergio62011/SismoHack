@@ -336,6 +336,9 @@ class VentanaPrincipal(QMainWindow):
         barra_arbol.addWidget(boton_zoom_in)
         barra_arbol.addWidget(boton_zoom_out)
         barra_arbol.addWidget(boton_reset)
+        boton_costo = QPushButton("Ver acceso costoso")
+        boton_costo.clicked.connect(self._mostrar_acceso_costoso)
+        barra_arbol.addWidget(boton_costo)
         barra_arbol.addStretch()
         arbol_layout.addLayout(barra_arbol)
 
@@ -368,8 +371,7 @@ class VentanaPrincipal(QMainWindow):
         panel_layout = QVBoxLayout(panel)
         grupo_tabla = QGroupBox("Eventos activos")
         tabla_layout = QVBoxLayout(grupo_tabla)
-        self.tabla_eventos = self._crear_tabla(
-            ["ID", "Magnitud", "Prof.", "Prioridad", "Revision", "Estado", "Zona"]
+        self.tabla_eventos = self._crear_tabla(["ID", "Magnitud", "Prof.", "Prioridad", "Revision", "Estado", "Zona", "Costo"]
         )
         self.tabla_eventos.itemSelectionChanged.connect(self._actualizar_botones_evento)
         tabla_layout.addWidget(self.tabla_eventos)
@@ -749,23 +751,27 @@ class VentanaPrincipal(QMainWindow):
         if not nombre:
             self._mostrar_error("El nombre de la zona es obligatorio")
             return
-        if self.x_min_zona.value() > self.x_max_zona.value() or self.y_min_zona.value() > self.y_max_zona.value():
-            self._mostrar_error("Los valores minimos no pueden ser mayores que los maximos")
+        if (self.x_min_zona.value() > self.x_max_zona.value()
+                or self.y_min_zona.value() > self.y_max_zona.value()):
+            self._mostrar_error(
+                "Los valores minimos no pueden ser mayores que los maximos"
+            )
             return
         zona = Zona(
             nombre, self.x_min_zona.value(), self.y_min_zona.value(),
             self.x_max_zona.value(), self.y_max_zona.value(),
             self.zona_poblada.isChecked(),
         )
-        self.sistema.mapa.agregar_zona(zona)
-        eventos = self.sistema.avl.in_order()
-        for evento in eventos:
-            self.sistema.avl.delete(evento.calcular_clave())
-        for evento in eventos:
-            self.sistema.mapa.asignar_zona_a_evento(evento)
-            self.sistema.avl.insert(evento)
-        self.statusBar().showMessage(f"Zona '{nombre}' agregada", 4000)
-        self.actualizar_vistas()
+        try:
+            afectados = self.sistema.agregar_zona(zona)
+            self.statusBar().showMessage(
+                f"Zona '{nombre}' agregada. "
+                f"{afectados} eventos cambiaron de prioridad.",
+                5000,
+            )
+            self.actualizar_vistas()
+        except ValueError as error:
+            self._mostrar_error(str(error))
 
     def actualizar_vistas(self):
         self._actualizar_reloj()
@@ -869,12 +875,15 @@ class VentanaPrincipal(QMainWindow):
                 f"{evento.profundidad:.1f}", f"P{evento.prioridad}",
                 evento.revision, evento.estado,
                 "Poblada" if evento.en_zona_poblada else "No poblada",
+                "Sí" if evento.acceso_costoso else "No",
             ]
             for columna, valor in enumerate(valores):
                 item = QTableWidgetItem(str(valor))
                 item.setForeground(QBrush(QColor("#172b4d")))
                 if columna == 0:
                     item.setData(Qt.ItemDataRole.UserRole, evento.id_evento)
+                if columna == 7 and evento.acceso_costoso:
+                    item.setForeground(QBrush(QColor("#c0392b")))
                 self.tabla_eventos.setItem(fila, columna, item)
 
     def _actualizar_tabla_reportes(self):
@@ -1255,6 +1264,27 @@ class VentanaPrincipal(QMainWindow):
         QMessageBox.information(self, "Comparación AVL vs BST", mensaje)
         self.statusBar().showMessage(
             f"Inserciones cargadas desde: {ruta}", 6000
+        )
+    
+    def _mostrar_acceso_costoso(self):
+        eventos = self.sistema.eventos_con_acceso_costoso()
+        if not eventos:
+            QMessageBox.information(
+                self, "Acceso costoso",
+                "No hay eventos de prioridad alta con acceso costoso."
+            )
+            return
+        lineas = []
+        for item in eventos:
+            evento = item["evento"]
+            lineas.append(
+                f"ID {evento.id_evento} | P{evento.prioridad} | "
+                f"M{evento.magnitud:.1f} | profundidad {item['profundidad']} | "
+                f"L={item['limite']} | visitados {item['nodos_visitados']}"
+            )
+        QMessageBox.information(
+            self, "Eventos con acceso costoso",
+            "\n".join(lineas)
         )
 
     def _mostrar_error(self, mensaje):
