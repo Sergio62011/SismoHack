@@ -9,7 +9,7 @@ import hashlib
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from persistence.json_loader import ErrorJsonPersistencia, JsonLoader
@@ -57,13 +57,16 @@ class GestorVersiones:
         # Serializar el estado con JsonSaver y envolverlo en el formato
         # de versión (que tiene metadatos adicionales).
         estado = JsonSaver.a_diccionario(sistema)
+
+                # [FIX] Usar la hora de simulación, no la del SO
+        ahora_simulacion = sistema.reloj.instante.strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         version = {
             "format": "SismoLab-Version",
             "schema_version": 1,
             "nombre_version": nombre,
-            "fecha_creacion": datetime.now(timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            ),
+            "fecha_creacion": ahora_simulacion,
             "estado": estado,
         }
 
