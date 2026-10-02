@@ -46,8 +46,8 @@ def es_candidato(evento_a, evento_b, w_horas, r_km):
 
 
 def obtener_candidatos(sistema, evento):
-    w_horas = sistema.parametros.W
-    r_km = sistema.parametros.R
+    w_horas = sistema.parametros.w
+    r_km = sistema.parametros.r
 
     candidatos = []
 
@@ -84,6 +84,7 @@ def elegir_referencia(evento, candidatos):
 
 def recalcular_todas(sistema):
     eventos = _eventos_validos(sistema)
+    print(eventos)
 
     # Primero se limpian las relaciones anteriores.
     for evento in eventos:
@@ -93,11 +94,15 @@ def recalcular_todas(sistema):
     # Luego se calculan nuevamente.
     for evento in eventos:
         candidatos = obtener_candidatos(sistema, evento)
+        print("============================================================================")
         referencia = elegir_referencia(evento, candidatos)
+        print(referencia)
 
         if referencia is not None:
             evento.referencia = referencia.id_evento
             referencia.referenciado_por.add(evento.id_evento)
+        print(evento)
+        print(referencia)
 
 
 def actualizar_asociaciones_de(sistema, id_evento=None):
