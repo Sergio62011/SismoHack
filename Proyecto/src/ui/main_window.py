@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QScrollArea,
 )
 
 from models.map import Zona
@@ -46,6 +47,7 @@ from persistence.versiones import (
     GestorVersiones,
 )
 from structure.bst import BST
+from services.auditoria import verificar_estructura
 
 class VistaArbolConZoom(QGraphicsView):
 
@@ -155,6 +157,7 @@ class VentanaPrincipal(QMainWindow):
         pestanas.addTab(self._crear_comparacion(), "AVL vs BST")
         pestanas.addTab(self._crear_historico(), "Histórico")
         pestanas.addTab(self._crear_versiones(), "Versiones")
+        pestanas.addTab(self._crear_auditoria(), "Auditoría")
         layout.addWidget(pestanas, 1)
 
         self.setCentralWidget(central)
@@ -687,6 +690,208 @@ class VentanaPrincipal(QMainWindow):
         layout = QVBoxLayout(pagina)
         layout.addWidget(division)
         return pagina
+    
+    def _crear_auditoria(self):
+        # Contenido real de la pestaña
+        contenido = QWidget()
+        layout = QVBoxLayout(contenido)
+        layout.setSpacing(12)
+
+        # === Barra superior con botón y estado ===
+        barra = QHBoxLayout()
+        boton_verificar = QPushButton("Verificar estructura")
+        boton_verificar.clicked.connect(self.verificar_estructura)
+        barra.addWidget(boton_verificar)
+
+        self.etiqueta_auditoria = QLabel("Sin verificar")
+        self.etiqueta_auditoria.setStyleSheet(
+            "background: #e8eef4; color: #52616f; padding: 9px 14px; "
+            "border-radius: 4px; font-weight: 600; font-size: 13px;"
+        )
+        barra.addWidget(self.etiqueta_auditoria)
+        barra.addStretch()
+        layout.addLayout(barra)
+
+        # === Errores ===
+        grupo_errores = QGroupBox("Errores encontrados")
+        errores_layout = QVBoxLayout(grupo_errores)
+        self.texto_errores = QTextEdit()
+        self.texto_errores.setReadOnly(True)
+        self.texto_errores.setMinimumHeight(100)
+        self.texto_errores.setMaximumHeight(150)
+        errores_layout.addWidget(self.texto_errores)
+        layout.addWidget(grupo_errores)
+
+        # === Indicadores ===
+        grupo_indicadores = QGroupBox("Indicadores")
+        indicadores_layout = QGridLayout(grupo_indicadores)
+        indicadores_layout.setSpacing(8)
+        indicadores_layout.setContentsMargins(10, 16, 10, 10)
+
+        self.etiquetas_auditoria = {}
+        campos = [
+            ("activos", "Activos", 0, 0),
+            ("historicos", "Históricos", 0, 1),
+            ("eliminados", "Eliminados", 0, 2),
+            ("altura", "Altura AVL", 0, 3),
+            ("hojas", "Hojas", 0, 4),
+
+            ("rotaciones_realizadas", "Rotaciones", 1, 0),
+            ("casos_ll", "LL", 1, 1),
+            ("casos_rr", "RR", 1, 2),
+            ("casos_lr", "LR", 1, 3),
+            ("casos_rl", "RL", 1, 4),
+
+            ("giros_simples_izquierda", "Giros izq.", 2, 0),
+            ("giros_simples_derecha", "Giros der.", 2, 1),
+            ("correcciones_aceptadas", "Correcciones", 2, 2),
+            ("reportes_descartados", "Descartados", 2, 3),
+            ("conflictos", "Conflictos", 2, 4),
+
+            ("confirmaciones", "Confirm.", 3, 0),
+            ("creados_por_reporte", "Creados", 3, 1),
+            ("reactivados", "Reactivados", 3, 2),
+            ("archivos_masivos", "Arch. masivos", 3, 3),
+            ("eventos_archivados", "Archivados", 3, 4),
+
+            ("por_prioridad_1", "P1", 4, 0),
+            ("por_prioridad_2", "P2", 4, 1),
+            ("por_prioridad_3", "P3", 4, 2),
+            ("pendientes", "Pendientes", 4, 3),
+            ("con_acceso_costoso", "Costoso", 4, 4),
+        ]
+
+        for clave, etiqueta, fila, columna in campos:
+            contenedor = QFrame()
+            contenedor.setFixedHeight(60)
+            contenedor.setMinimumWidth(130)
+            contenedor.setStyleSheet(
+                "QFrame {"
+                "   background: white;"
+                "   border: 1px solid #d8e0e8;"
+                "   border-radius: 4px;"
+                "}"
+                "QFrame QLabel {"
+                "   color: #172b4d;"
+                "   background: transparent;"
+                "}"
+            )
+            contenedor_layout = QVBoxLayout(contenedor)
+            contenedor_layout.setContentsMargins(10, 6, 10, 6)
+            contenedor_layout.setSpacing(2)
+
+            nombre = QLabel(etiqueta)
+            nombre.setStyleSheet(
+                "color: #52616f; font-size: 11px; border: 0; "
+                "background: transparent;"
+            )
+
+            valor = QLabel("0")
+            valor.setStyleSheet(
+                "font-size: 18px; font-weight: 700; color: #17324d; "
+                "border: 0; background: transparent;"
+            )
+
+            contenedor_layout.addWidget(nombre)
+            contenedor_layout.addWidget(valor)
+            self.etiquetas_auditoria[clave] = valor
+            indicadores_layout.addWidget(
+                contenedor, fila, columna,
+                Qt.AlignmentFlag.AlignTop
+            )
+
+        for columna in range(5):
+            indicadores_layout.setColumnStretch(columna, 1)
+
+        layout.addWidget(grupo_indicadores)
+
+        # === Recorridos ===
+        grupo_recorridos = QGroupBox("Recorridos")
+        recorridos_layout = QVBoxLayout(grupo_recorridos)
+        self.texto_recorridos = QTextEdit()
+        self.texto_recorridos.setReadOnly(True)
+        self.texto_recorridos.setMinimumHeight(110)
+        recorridos_layout.addWidget(self.texto_recorridos)
+        layout.addWidget(grupo_recorridos)
+
+        self._actualizar_auditoria()
+
+        # === Envolver todo en un scroll ===
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(contenido)
+        scroll.setStyleSheet(
+            "QScrollArea { border: 0; background: transparent; }"
+        )
+        return scroll
+    
+    def verificar_estructura(self):
+        reporte = verificar_estructura(self.sistema)
+
+        if reporte["ok"]:
+            self.etiqueta_auditoria.setText("Estructura válida")
+            self.etiqueta_auditoria.setStyleSheet(
+                "background: #d4edda; color: #155d4a; padding: 7px 12px; "
+                "border-radius: 4px; font-weight: 600;"
+            )
+            self.texto_errores.setPlainText(
+                "No se encontraron inconsistencias."
+            )
+        else:
+            n = len(reporte["errores"])
+            self.etiqueta_auditoria.setText(f"{n} errores encontrados")
+            self.etiqueta_auditoria.setStyleSheet(
+                "background: #fdecea; color: #c0392b; padding: 7px 12px; "
+                "border-radius: 4px; font-weight: 600;"
+            )
+            self.texto_errores.setPlainText(
+                "\n".join(f"- {e}" for e in reporte["errores"])
+            )
+
+        self._pintar_indicadores(reporte["indicadores"])
+
+    def _pintar_indicadores(self, ind):
+        valores = {
+            "activos": ind["activos"],
+            "historicos": ind["historicos"],
+            "eliminados": ind["eliminados"],
+            "altura": ind["altura"],
+            "hojas": ind["hojas"],
+            "rotaciones_realizadas": ind["rotaciones_realizadas"],
+            "casos_ll": ind["casos_ll"],
+            "casos_rr": ind["casos_rr"],
+            "casos_lr": ind["casos_lr"],
+            "casos_rl": ind["casos_rl"],
+            "giros_simples_izquierda": ind["giros_simples_izquierda"],
+            "giros_simples_derecha": ind["giros_simples_derecha"],
+            "correcciones_aceptadas": ind["correcciones_aceptadas"],
+            "reportes_descartados": ind["reportes_descartados"],
+            "conflictos": ind["conflictos"],
+            "confirmaciones": ind["confirmaciones"],
+            "creados_por_reporte": ind["creados_por_reporte"],
+            "reactivados": ind["reactivados"],
+            "archivos_masivos": ind["archivos_masivos"],
+            "eventos_archivados": ind["eventos_archivados"],
+            "por_prioridad_1": ind["por_prioridad"].get(1, 0),
+            "por_prioridad_2": ind["por_prioridad"].get(2, 0),
+            "por_prioridad_3": ind["por_prioridad"].get(3, 0),
+            "pendientes": ind["pendientes"],
+            "con_acceso_costoso": ind["con_acceso_costoso"],
+        }
+        for clave, valor in valores.items():
+            self.etiquetas_auditoria[clave].setText(str(valor))
+
+        self.texto_recorridos.setPlainText(
+            f"Inorden:     {ind['inorden']}\n"
+            f"Preorden:    {ind['preorden']}\n"
+            f"Postorden:   {ind['postorden']}\n"
+            f"Por niveles: {ind['por_niveles']}\n"
+            f"Nodos por nivel: {ind['nodos_por_nivel']}"
+        )
+        
+    def _actualizar_auditoria(self):
+        reporte = verificar_estructura(self.sistema)
+        self._pintar_indicadores(reporte["indicadores"])
 
     def _crear_formulario(self, layout, incluir_revision=False):
         form = QFormLayout()
@@ -936,6 +1141,7 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar_boton_estres()
         self._actualizar_indicador_modo()
         self._actualizar_tabla_versiones()
+        self._actualizar_auditoria()
 
     def _actualizar_boton_deshacer(self):
         puede = self.sistema.puede_deshacer()
@@ -1706,67 +1912,6 @@ class VentanaPrincipal(QMainWindow):
             self, "Eventos con acceso costoso",
             "\n".join(lineas)
         )
-    def verificar_estructura(self):
-        """Verificación local de la estructura del AVL activo."""
-        errores = []
-
-        def verificar_orden(nodo, minimo, maximo):
-            if nodo is None:
-                return
-            clave = nodo.event.calcular_clave()
-            if minimo is not None and clave <= minimo:
-                errores.append(
-                    f"Evento {nodo.event.id_evento}: orden BST violado"
-                )
-            if maximo is not None and clave >= maximo:
-                errores.append(
-                    f"Evento {nodo.event.id_evento}: orden BST violado"
-                )
-            verificar_orden(nodo.left, minimo, clave)
-            verificar_orden(nodo.right, clave, maximo)
-
-        verificar_orden(self.sistema.avl.root, None, None)
-
-        def verificar_alturas(nodo):
-            if nodo is None:
-                return -1
-            h_izq = verificar_alturas(nodo.left)
-            h_der = verificar_alturas(nodo.right)
-            esperada = 1 + max(h_izq, h_der)
-            fb = h_izq - h_der
-            if nodo.height != esperada:
-                errores.append(
-                    f"Evento {nodo.event.id_evento}: altura "
-                    f"{nodo.height} != {esperada}"
-                )
-            if abs(nodo.balance_factor - fb) > 1e-9:
-                errores.append(
-                    f"Evento {nodo.event.id_evento}: factor "
-                    f"{nodo.balance_factor} != {fb}"
-                )
-            if not self.sistema.en_modo_estres() and abs(fb) > 1:
-                errores.append(
-                    f"Evento {nodo.event.id_evento}: factor "
-                    f"{fb} fuera de [-1, 1] en modo normal"
-                )
-            return esperada
-
-        verificar_alturas(self.sistema.avl.root)
-
-        if not errores:
-            QMessageBox.information(
-                self, "Auditoría",
-                "La estructura es consistente. "
-                "No se detectaron problemas."
-            )
-        else:
-            QMessageBox.warning(
-                self, "Auditoría: inconsistencias detectadas",
-                "\n".join(errores[:30]) + (
-                    f"\n\n... y {len(errores) - 30} más."
-                    if len(errores) > 30 else ""
-                ),
-            )
 
     def _mostrar_error(self, mensaje):
         QMessageBox.warning(self, "Dato no valido", mensaje)

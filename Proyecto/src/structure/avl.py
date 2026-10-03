@@ -15,6 +15,12 @@ class AVL:
         self.root = None
         self.modo_estres = False
         self.rotaciones_realizadas = 0
+        self.casos_ll = 0
+        self.casos_rr = 0
+        self.casos_lr = 0
+        self.casos_rl = 0
+        self.giros_simples_izquierda = 0
+        self.giros_simples_derecha = 0
         self.rotaciones_ultima_operacion = []
         self.pasadas_recuperacion = 0
         self.nodos_visitados_recuperacion = 0
@@ -65,27 +71,33 @@ class AVL:
     def _balance(self, node):
         fb = node.balance_factor
 
-        # LL
         if fb > 1 and node.left is not None and node.left.balance_factor >= 0:
             self.rotaciones_ultima_operacion.append("LL")
+            self.casos_ll += 1
+            self.giros_simples_derecha += 1
             return self._rotate_right(node)
 
-        # LR
         if fb > 1 and node.left is not None and node.left.balance_factor < 0:
             self.rotaciones_ultima_operacion.append("LR")
+            self.casos_lr += 1
+            self.giros_simples_izquierda += 1
+            self.giros_simples_derecha += 1
             node.left = self._rotate_left(node.left)
             if node.left is not None:
                 node.left.parent = node
             return self._rotate_right(node)
 
-        # RR
         if fb < -1 and node.right is not None and node.right.balance_factor <= 0:
             self.rotaciones_ultima_operacion.append("RR")
+            self.casos_rr += 1
+            self.giros_simples_izquierda += 1
             return self._rotate_left(node)
 
-        # RL
         if fb < -1 and node.right is not None and node.right.balance_factor > 0:
             self.rotaciones_ultima_operacion.append("RL")
+            self.casos_rl += 1
+            self.giros_simples_derecha += 1
+            self.giros_simples_izquierda += 1
             node.right = self._rotate_right(node.right)
             if node.right is not None:
                 node.right.parent = node
@@ -430,11 +442,16 @@ class AVL:
         return self._is_avl(node.left) and self._is_avl(node.right)
     
     def copia(self):
-        
         nuevo = AVL()
         nuevo.modo_estres = self.modo_estres
         nuevo.rotaciones_realizadas = self.rotaciones_realizadas
         nuevo.rotaciones_ultima_operacion = list(self.rotaciones_ultima_operacion)
+        nuevo.casos_ll = self.casos_ll
+        nuevo.casos_rr = self.casos_rr
+        nuevo.casos_lr = self.casos_lr
+        nuevo.casos_rl = self.casos_rl
+        nuevo.giros_simples_izquierda = self.giros_simples_izquierda
+        nuevo.giros_simples_derecha = self.giros_simples_derecha
 
         if self.root is not None:
             nuevo.root = self.root.copia(nuevo_padre=None)
