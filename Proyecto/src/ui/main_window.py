@@ -38,12 +38,14 @@ from models.map import Zona
 from models.report import Reporte
 from services.sistema_sismico import SistemaSismico
 from services.historial import Accion
+from services.archivo import archivar_rama, previsualizar_archivo
 from persistence.json_loader import JsonLoader, ErrorJsonPersistencia
 from persistence.json_saver import JsonSaver
 from persistence.versiones import (
     ErrorVersionesPersistentes,
     GestorVersiones,
 )
+from structure.bst import BST
 
 class VistaArbolConZoom(QGraphicsView):
 
@@ -80,13 +82,17 @@ class VentanaPrincipal(QMainWindow):
     def __init__(self):
         super().__init__()
         self.sistema = SistemaSismico()
+        # Store persistent versions separately from ordinary JSON files.
         self.gestor_versiones = GestorVersiones(
-            self._data_dir()
+            self._data_dir() / "versiones"
         )
+        # The comparison BST preserves an insertion-load sequence when available.
+        self.bst_comparativo = None
         self._crear_ventana()
         self._crear_timer_reloj()
         self._crear_timer_procesamiento()
         self.actualizar_vistas()
+
 
     def _crear_timer_reloj(self):
         self.timer_reloj = QTimer(self)
@@ -146,6 +152,8 @@ class VentanaPrincipal(QMainWindow):
         pestanas.addTab(self._crear_eventos(), "Eventos")
         pestanas.addTab(self._crear_reportes(), "Reportes")
         pestanas.addTab(self._crear_mapa(), "Mapa y zonas")
+        pestanas.addTab(self._crear_comparacion(), "AVL vs BST")
+        pestanas.addTab(self._crear_historico(), "Histórico")
         pestanas.addTab(self._crear_versiones(), "Versiones")
         layout.addWidget(pestanas, 1)
 
@@ -339,6 +347,9 @@ class VentanaPrincipal(QMainWindow):
         boton_costo = QPushButton("Ver acceso costoso")
         boton_costo.clicked.connect(self._mostrar_acceso_costoso)
         barra_arbol.addWidget(boton_costo)
+        boton_verificar = QPushButton("Verificar estructura")
+        boton_verificar.clicked.connect(self.verificar_estructura)
+        barra_arbol.addWidget(boton_verificar)
         barra_arbol.addStretch()
         arbol_layout.addLayout(barra_arbol)
 
@@ -476,6 +487,144 @@ class VentanaPrincipal(QMainWindow):
         mapa_layout.addWidget(self.tabla_mapa)
         division.addWidget(formulario)
         division.addWidget(grupo_mapa)
+        division.setSizes([330, 780])
+        layout = QVBoxLayout(pagina)
+        layout.addWidget(division)
+        return pagina
+
+    def _crear_comparacion(self):
+        pagina = QWidget()
+        layout = QVBoxLayout(pagina)
+
+        explicacion = QLabel(
+            "Comparación AVL vs BST. El AVL se muestra tal como está en "
+            "memoria. El BST se construye con la misma secuencia de "
+            "inserciones cuando se carga un JSON por inserciones; en caso "
+            "contrario, se reconstruye insertando los eventos activos en "
+            "orden ascendente de K."
+        )
+
+        explicacion.setStyleSheet("color: #52616f;")
+        explicacion.setWordWrap(True)
+        layout.addWidget(explicacion)
+
+        barra_botones = QHBoxLayout()
+        boton_cargar = QPushButton("Cargar JSON por inserciones")
+        boton_cargar.clicked.connect(self.cargar_json_inserciones)
+        barra_botones.addWidget(boton_cargar)
+        barra_botones.addStretch()
+        layout.addLayout(barra_botones)
+
+        metricas = QGroupBox("Métricas estructurales")
+        rejilla = QGridLayout(metricas)
+        self.etiquetas_comparacion = {}
+        datos = [
+            ("AVL altura", "avl_altura"),
+            ("AVL hojas", "avl_hojas"),
+            ("AVL raíz", "avl_raiz"),
+            ("AVL nodos", "avl_nodos"),
+            ("BST altura", "bst_altura"),
+            ("BST hojas", "bst_hojas"),
+            ("BST raíz", "bst_raiz"),
+            ("BST nodos", "bst_nodos"),
+        ]
+        for indice, (texto, clave) in enumerate(datos):
+            tarjeta = QFrame()
+            tarjeta.setStyleSheet(
+                "QFrame { background: white; border: 1px solid #d8e0e8; "
+                "border-radius: 5px; }"
+            )
+            tarjeta_layout = QVBoxLayout(tarjeta)
+            nombre = QLabel(texto)
+            nombre.setStyleSheet("color: #52616f;")
+            valor = QLabel("-")
+            valor.setStyleSheet(
+                "font-size: 18px; font-weight: 700; color: #17324d;"
+            )
+            tarjeta_layout.addWidget(nombre)
+            tarjeta_layout.addWidget(valor)
+            self.etiquetas_comparacion[clave] = valor
+            rejilla.addWidget(tarjeta, indice // 4, indice % 4)
+        layout.addWidget(metricas)
+
+        arboles = QSplitter(Qt.Orientation.Horizontal)
+        grupo_avl = QGroupBox("AVL temporal")
+        avl_layout = QVBoxLayout(grupo_avl)
+        self.escena_avl_comparacion = QGraphicsScene(self)
+        self.vista_avl_comparacion = VistaArbolConZoom(
+            self.escena_avl_comparacion
+        )
+        avl_layout.addWidget(self.vista_avl_comparacion)
+
+        grupo_bst = QGroupBox("BST sin balanceo")
+        bst_layout = QVBoxLayout(grupo_bst)
+        self.escena_bst_comparacion = QGraphicsScene(self)
+        self.vista_bst_comparacion = VistaArbolConZoom(
+            self.escena_bst_comparacion
+        )
+        bst_layout.addWidget(self.vista_bst_comparacion)
+
+        arboles.addWidget(grupo_avl)
+        arboles.addWidget(grupo_bst)
+        arboles.setSizes([600, 600])
+        layout.addWidget(arboles, 1)
+        return pagina
+
+    def _crear_historico(self):
+        pagina = QWidget()
+        division = QSplitter(Qt.Orientation.Horizontal)
+        self._archivo_previsualizado = None
+
+        archivo = QGroupBox("Archivo de rama")
+        archivo_layout = QVBoxLayout(archivo)
+        ayuda = QLabel(
+            "El sistema archiva la mayor rama elegible: eventos de prioridad "
+            "baja con antigüedad superior al límite T."
+        )
+        ayuda.setWordWrap(True)
+        ayuda.setStyleSheet("color: #52616f;")
+        archivo_layout.addWidget(ayuda)
+        self.etiqueta_previsualizacion_archivo = QLabel(
+            "Aún no se ha evaluado una rama."
+        )
+        self.etiqueta_previsualizacion_archivo.setWordWrap(True)
+        self.etiqueta_previsualizacion_archivo.setStyleSheet(
+            "background: white; color: #172b4d; border: 1px solid #d8e0e8; "
+            "padding: 8px;"
+        )
+        archivo_layout.addWidget(self.etiqueta_previsualizacion_archivo)
+        boton_previsualizar = QPushButton("Previsualizar archivo")
+        boton_previsualizar.clicked.connect(self.previsualizar_archivo_historico)
+        self.boton_archivar_rama = QPushButton("Archivar rama")
+        self.boton_archivar_rama.clicked.connect(self.archivar_rama_historico)
+        self.boton_archivar_rama.setEnabled(False)
+        archivo_layout.addWidget(boton_previsualizar)
+        archivo_layout.addWidget(self.boton_archivar_rama)
+        archivo_layout.addStretch()
+
+        panel = QWidget()
+        panel_layout = QVBoxLayout(panel)
+        grupo_tabla = QGroupBox("Eventos archivados")
+        tabla_layout = QVBoxLayout(grupo_tabla)
+        self.tabla_historico = self._crear_tabla(
+            ["ID", "Magnitud", "Prioridad", "Revision", "Estado", "Fecha UTC"]
+        )
+        self.tabla_historico.itemSelectionChanged.connect(
+            self._actualizar_detalle_historico
+        )
+        tabla_layout.addWidget(self.tabla_historico)
+        panel_layout.addWidget(grupo_tabla, 1)
+
+        grupo_detalle = QGroupBox("Detalle del evento archivado")
+        detalle_layout = QVBoxLayout(grupo_detalle)
+        self.texto_detalle_historico = QTextEdit()
+        self.texto_detalle_historico.setReadOnly(True)
+        self.texto_detalle_historico.setMinimumHeight(150)
+        detalle_layout.addWidget(self.texto_detalle_historico)
+        panel_layout.addWidget(grupo_detalle)
+
+        division.addWidget(archivo)
+        division.addWidget(panel)
         division.setSizes([330, 780])
         layout = QVBoxLayout(pagina)
         layout.addWidget(division)
@@ -779,6 +928,9 @@ class VentanaPrincipal(QMainWindow):
         self._actualizar_tabla_eventos()
         self._actualizar_tabla_reportes()
         self._actualizar_mapa()
+        self._actualizar_comparacion()
+        self._actualizar_tabla_historico()
+        self._actualizar_estado_archivo()
         self._actualizar_botones_evento()
         self._actualizar_boton_deshacer()
         self._actualizar_boton_estres()
@@ -920,6 +1072,267 @@ class VentanaPrincipal(QMainWindow):
                 self.tabla_mapa.setItem(fila, columna, item)
         self.tabla_mapa.setHorizontalHeaderLabels([str(i) for i in range(columnas)])
         self.tabla_mapa.setVerticalHeaderLabels([str(i) for i in range(filas)])
+
+    def _actualizar_comparacion(self):
+        avl = self.sistema.avl
+        bst = self._obtener_bst_comparativo()
+
+        valores = {
+            "avl_altura": avl.height(),
+            "avl_hojas": avl.number_of_leaves(),
+            "avl_raiz": avl.root.event.id_evento if avl.root else "-",
+            "avl_nodos": avl.size(),
+            "bst_altura": bst.height(),
+            "bst_hojas": bst.number_of_leaves(),
+            "bst_raiz": bst.root.event.id_evento if bst.root else "-",
+            "bst_nodos": bst.size(),
+        }
+        for clave, valor in valores.items():
+            self.etiquetas_comparacion[clave].setText(str(valor))
+        self._dibujar_arbol_comparativo(
+            self.escena_avl_comparacion, avl.root, "AVL"
+        )
+        self._dibujar_arbol_comparativo(
+            self.escena_bst_comparacion, bst.root, "BST"
+        )
+        QTimer.singleShot(
+            0,
+            lambda: self._encuadrar_escena(
+                self.vista_avl_comparacion, self.escena_avl_comparacion
+            ),
+        )
+        QTimer.singleShot(
+            0,
+            lambda: self._encuadrar_escena(
+                self.vista_bst_comparacion, self.escena_bst_comparacion
+            ),
+        )
+
+    def _obtener_bst_comparativo(self):
+        claves_avl = [
+            evento.calcular_clave() for evento in self.sistema.avl.in_order()
+        ]
+        if self.bst_comparativo is not None:
+            claves_bst = [
+                evento.calcular_clave()
+                for evento in self.bst_comparativo.in_order()
+            ]
+            if claves_bst == claves_avl:
+                return self.bst_comparativo
+
+        bst = BST()
+        for evento in self.sistema.avl.in_order():
+            bst.insert(evento.copia())
+        self.bst_comparativo = bst
+        return bst
+
+    @staticmethod
+    def _encuadrar_escena(vista, escena):
+        rectangulo = escena.itemsBoundingRect().adjusted(-30, -25, 30, 35)
+        if rectangulo.isEmpty():
+            rectangulo = escena.sceneRect()
+        if rectangulo.isEmpty():
+            return
+        vista.resetTransform()
+        vista.fitInView(rectangulo, Qt.AspectRatioMode.KeepAspectRatio)
+
+    def _dibujar_arbol_comparativo(self, escena, raiz, nombre_arbol):
+        escena.clear()
+        if raiz is None:
+            texto = escena.addText(f"No hay nodos en el {nombre_arbol}")
+            texto.setDefaultTextColor(QColor("#52616f"))
+            texto.setPos(20, 20)
+            escena.setSceneRect(0, 0, 500, 120)
+            return
+
+        nodos = []
+
+        def contar(nodo):
+            if nodo is None:
+                return 0
+            return 1 + contar(nodo.left) + contar(nodo.right)
+
+        cantidad = contar(raiz)
+        ancho_total = max(900.0, 145.0 * cantidad)
+        posiciones = {}
+        separacion_y = 105.0
+
+        def asignar_posiciones(nodo, nivel, minimo, maximo):
+            if nodo is None:
+                return
+            x = (minimo + maximo) / 2.0
+            y = 55.0 + nivel * separacion_y
+            posiciones[id(nodo)] = (x, y)
+            nodos.append(nodo)
+            asignar_posiciones(nodo.left, nivel + 1, minimo, x)
+            asignar_posiciones(nodo.right, nivel + 1, x, maximo)
+
+        asignar_posiciones(raiz, 0, 80.0, ancho_total - 80.0)
+        enlace = QPen(QColor("#8aa0b8"), 2)
+        for nodo in nodos:
+            x, y = posiciones[id(nodo)]
+            for hijo in (nodo.left, nodo.right):
+                if hijo is None:
+                    continue
+                hijo_x, hijo_y = posiciones[id(hijo)]
+                enlace_curvo = QPainterPath()
+                enlace_curvo.moveTo(x, y + 30)
+                enlace_curvo.cubicTo(
+                    x, y + 55, hijo_x, hijo_y - 55, hijo_x, hijo_y - 30
+                )
+                escena.addPath(enlace_curvo, enlace)
+
+        if nombre_arbol == "AVL":
+            fondo, borde = QColor("#dcecf8"), QColor("#1967a8")
+        else:
+            fondo, borde = QColor("#fff1cf"), QColor("#aa6d00")
+        for nodo in nodos:
+            x, y = posiciones[id(nodo)]
+            escena.addRect(
+                x - 62, y - 30, 124, 60,
+                QPen(borde, 2), QBrush(fondo),
+            )
+            etiqueta = (
+                f"ID {nodo.event.id_evento}\n"
+                f"K={nodo.event.calcular_clave()}\n"
+                f"h={nodo.height}  fb={nodo.balance_factor}"
+            )
+            texto = escena.addText(etiqueta)
+            texto.setDefaultTextColor(QColor("#172b4d"))
+            fuente = texto.font()
+            fuente.setPointSize(8)
+            texto.setFont(fuente)
+            rectangulo = texto.boundingRect()
+            texto.setPos(x - rectangulo.width() / 2, y - rectangulo.height() / 2)
+        rectangulo = escena.itemsBoundingRect().adjusted(-40, -35, 40, 50)
+        escena.setSceneRect(rectangulo)
+        # Fit the complete tree inside its view.
+        vista = (
+            self.vista_avl_comparacion
+            if nombre_arbol == "AVL"
+            else self.vista_bst_comparacion
+        )
+        vista.resetTransform()
+        vista.fitInView(rectangulo, Qt.AspectRatioMode.KeepAspectRatio)
+
+    def _actualizar_tabla_historico(self):
+        eventos = sorted(
+            self.sistema._historicos.values(), key=lambda evento: evento.id_evento
+        )
+        self.tabla_historico.setRowCount(len(eventos))
+        for fila, evento in enumerate(eventos):
+            valores = [
+                evento.id_evento,
+                f"{evento.magnitud:.1f}",
+                f"P{evento.prioridad}",
+                evento.revision,
+                evento.estado,
+                evento.fecha_hora.strftime("%Y-%m-%d %H:%M:%S"),
+            ]
+            for columna, valor in enumerate(valores):
+                item = QTableWidgetItem(str(valor))
+                item.setForeground(QBrush(QColor("#172b4d")))
+                if columna == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, evento.id_evento)
+                self.tabla_historico.setItem(fila, columna, item)
+        self._actualizar_detalle_historico()
+
+    def _actualizar_estado_archivo(self):
+        try:
+            resultado = previsualizar_archivo(self.sistema)
+        except Exception as error:
+            self._archivo_previsualizado = None
+            self.boton_archivar_rama.setEnabled(False)
+            self.etiqueta_previsualizacion_archivo.setText(
+                f"No se pudo evaluar el archivo: {error}"
+            )
+            return
+
+        self._archivo_previsualizado = resultado
+        self.boton_archivar_rama.setEnabled(resultado["elegible"])
+        if resultado["elegible"]:
+            self.etiqueta_previsualizacion_archivo.setText(
+                f"Rama lista para archivar\n\n"
+                f"Raíz: SIS-{resultado['raiz'].id_evento:06d}\n"
+                f"Profundidad: {resultado['profundidad']}\n"
+                f"Eventos: {resultado['cantidad']}\n"
+                f"IDs: {', '.join(map(str, sorted(resultado['ids'])))}"
+            )
+            return
+
+        eventos = list(self.sistema._eventos_activos.values())
+        prioridad_baja = [evento for evento in eventos if evento.prioridad == 1]
+        antiguos = [
+            evento for evento in prioridad_baja
+            if self.sistema.reloj.antiguedad_horas(evento.fecha_hora)
+            > self.sistema.parametros.t
+        ]
+        self.etiqueta_previsualizacion_archivo.setText(
+            "No hay una rama elegible para archivar.\n\n"
+            f"Eventos activos: {len(eventos)}\n"
+            f"Prioridad baja: {len(prioridad_baja)}\n"
+            f"Bajos con antigüedad mayor que T: {len(antiguos)}\n"
+            f"T actual: {self.sistema.parametros.t:.1f} horas"
+        )
+
+    def _actualizar_detalle_historico(self):
+        fila = self.tabla_historico.currentRow()
+        if fila < 0:
+            self.texto_detalle_historico.setPlainText(
+                "Selecciona un evento archivado para ver sus datos."
+            )
+            return
+        item = self.tabla_historico.item(fila, 0)
+        if item is None:
+            return
+        event_id = item.data(Qt.ItemDataRole.UserRole)
+        evento = self.sistema._historicos.get(event_id)
+        if evento is None:
+            return
+        referencia = evento.referencia if evento.referencia is not None else "Sin referencia"
+        texto = (
+            f"ID: {evento.id_evento}\n"
+            f"Clave: {evento.calcular_clave()}\n"
+            f"Magnitud: {evento.magnitud:.1f}\n"
+            f"Profundidad: {evento.profundidad:.1f} km\n"
+            f"Epicentro: ({evento.x:.1f}, {evento.y:.1f})\n"
+            f"Fecha UTC: {evento.fecha_hora.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Revisión: {evento.revision}\n"
+            f"Estado: {evento.estado}\n"
+            f"Estaciones: {', '.join(sorted(evento.estaciones)) or '-'}\n"
+            f"Referencia: {referencia}\n"
+            f"Referenciado por: {', '.join(map(str, sorted(evento.referenciado_por))) or '-'}"
+        )
+        self.texto_detalle_historico.setPlainText(texto)
+
+    def previsualizar_archivo_historico(self):
+        self._actualizar_estado_archivo()
+
+    def archivar_rama_historico(self):
+        resultado = previsualizar_archivo(self.sistema)
+        if not resultado["elegible"]:
+            self.previsualizar_archivo_historico()
+            return
+        respuesta = QMessageBox.question(
+            self,
+            "Archivar rama",
+            f"Se archivarán {resultado['cantidad']} eventos: "
+            f"{', '.join(map(str, sorted(resultado['ids'])))}.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if respuesta != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            resultado = archivar_rama(self.sistema)
+        except ValueError as error:
+            self._mostrar_error(str(error))
+            return
+        self._archivo_previsualizado = None
+        self.boton_archivar_rama.setEnabled(False)
+        self.etiqueta_previsualizacion_archivo.setText(resultado["mensaje"])
+        self.statusBar().showMessage(resultado["mensaje"], 5000)
+        self.actualizar_vistas()
 
     def _actualizar_grafico_arbol(self):
         self.escena_arbol.clear()
@@ -1106,6 +1519,7 @@ class VentanaPrincipal(QMainWindow):
             Accion(f"restaurar_version {nombre}", estado_antes)
         )
         self.sistema = nuevo_sistema
+        self.bst_comparativo = None
         self.actualizar_vistas()
         self.statusBar().showMessage(
             f"Versión '{nombre}' restaurada", 5000
@@ -1145,6 +1559,16 @@ class VentanaPrincipal(QMainWindow):
         carpeta.mkdir(exist_ok=True)
         return carpeta
 
+    def _seleccionar_archivo_json(self, titulo):
+        ruta, _ = QFileDialog.getOpenFileName(
+            self,
+            titulo,
+            str(self._data_dir()),
+            "Archivos JSON (*.json *.JSON);;Todos los archivos (*)",
+        )
+        return ruta
+
+
     def guardar_json(self):
         ruta_sugerida = str(self._data_dir() / "sismolab_estado.json")
         ruta, _ = QFileDialog.getSaveFileName(
@@ -1172,12 +1596,7 @@ class VentanaPrincipal(QMainWindow):
             )
 
     def cargar_json_topologia(self):
-        ruta, _ = QFileDialog.getOpenFileName(
-            self,
-            "Cargar topología desde JSON",
-            str(self._data_dir()),
-            "Archivos JSON (*.json)",
-        )
+        ruta = self._seleccionar_archivo_json("Cargar topología desde JSON")
         if not ruta:
             return
 
@@ -1201,6 +1620,7 @@ class VentanaPrincipal(QMainWindow):
             return
 
         self.sistema = nuevo_sistema
+        self.bst_comparativo = None
         self.actualizar_vistas()
         self.statusBar().showMessage(
             f"Topología cargada desde: {ruta}", 6000
@@ -1214,11 +1634,8 @@ class VentanaPrincipal(QMainWindow):
         )
 
     def cargar_json_inserciones(self):
-        ruta, _ = QFileDialog.getOpenFileName(
-            self,
-            "Cargar por inserciones desde JSON",
-            str(self._data_dir()),
-            "Archivos JSON (*.json)",
+        ruta = self._seleccionar_archivo_json(
+            "Cargar por inserciones desde JSON"
         )
         if not ruta:
             return
@@ -1239,6 +1656,8 @@ class VentanaPrincipal(QMainWindow):
             )
             return
 
+        # Keep the BST built by the insertion loader for the comparison view.
+        self.bst_comparativo = bst
         self.sistema = sistema_nuevo
         self.actualizar_vistas()
 
@@ -1263,7 +1682,8 @@ class VentanaPrincipal(QMainWindow):
 
         QMessageBox.information(self, "Comparación AVL vs BST", mensaje)
         self.statusBar().showMessage(
-            f"Inserciones cargadas desde: {ruta}", 6000
+            f"Inserciones cargadas desde: {ruta}. "
+            f"Ve al tab 'AVL vs BST' para ver los árboles.", 8000
         )
     
     def _mostrar_acceso_costoso(self):
@@ -1286,6 +1706,67 @@ class VentanaPrincipal(QMainWindow):
             self, "Eventos con acceso costoso",
             "\n".join(lineas)
         )
+    def verificar_estructura(self):
+        """Verificación local de la estructura del AVL activo."""
+        errores = []
+
+        def verificar_orden(nodo, minimo, maximo):
+            if nodo is None:
+                return
+            clave = nodo.event.calcular_clave()
+            if minimo is not None and clave <= minimo:
+                errores.append(
+                    f"Evento {nodo.event.id_evento}: orden BST violado"
+                )
+            if maximo is not None and clave >= maximo:
+                errores.append(
+                    f"Evento {nodo.event.id_evento}: orden BST violado"
+                )
+            verificar_orden(nodo.left, minimo, clave)
+            verificar_orden(nodo.right, clave, maximo)
+
+        verificar_orden(self.sistema.avl.root, None, None)
+
+        def verificar_alturas(nodo):
+            if nodo is None:
+                return -1
+            h_izq = verificar_alturas(nodo.left)
+            h_der = verificar_alturas(nodo.right)
+            esperada = 1 + max(h_izq, h_der)
+            fb = h_izq - h_der
+            if nodo.height != esperada:
+                errores.append(
+                    f"Evento {nodo.event.id_evento}: altura "
+                    f"{nodo.height} != {esperada}"
+                )
+            if abs(nodo.balance_factor - fb) > 1e-9:
+                errores.append(
+                    f"Evento {nodo.event.id_evento}: factor "
+                    f"{nodo.balance_factor} != {fb}"
+                )
+            if not self.sistema.en_modo_estres() and abs(fb) > 1:
+                errores.append(
+                    f"Evento {nodo.event.id_evento}: factor "
+                    f"{fb} fuera de [-1, 1] en modo normal"
+                )
+            return esperada
+
+        verificar_alturas(self.sistema.avl.root)
+
+        if not errores:
+            QMessageBox.information(
+                self, "Auditoría",
+                "La estructura es consistente. "
+                "No se detectaron problemas."
+            )
+        else:
+            QMessageBox.warning(
+                self, "Auditoría: inconsistencias detectadas",
+                "\n".join(errores[:30]) + (
+                    f"\n\n... y {len(errores) - 30} más."
+                    if len(errores) > 30 else ""
+                ),
+            )
 
     def _mostrar_error(self, mensaje):
         QMessageBox.warning(self, "Dato no valido", mensaje)

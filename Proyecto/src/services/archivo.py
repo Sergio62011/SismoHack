@@ -8,7 +8,7 @@ def _es_elegible(evento, sistema):
         evento.fecha_hora
     )
 
-    return antiguedad > sistema.parametros.T
+    return antiguedad > sistema.parametros.t
 
 
 def _buscar_ramas_elegibles(node, sistema, profundidad=0):
@@ -31,7 +31,7 @@ def _buscar_ramas_elegibles(node, sistema, profundidad=0):
         )
     )
 
-    nodo_valido = _es_elegible(node.evento, sistema)
+    nodo_valido = _es_elegible(node.event, sistema)
 
     cantidad = 1 + cantidad_izquierda + cantidad_derecha
 
@@ -47,7 +47,7 @@ def _buscar_ramas_elegibles(node, sistema, profundidad=0):
 
     if subarbol_valido:
         ramas.append({
-            "raiz": node.evento,
+            "raiz": node.event,
             "profundidad": profundidad,
             "cantidad": cantidad,
         })
@@ -95,11 +95,11 @@ def previsualizar_archivo(sistema):
         if node is None:
             return
 
-        if node.evento.id_evento in ids:
+        if node.event.id_evento in ids:
             return
 
-        ids.append(node.evento.id_evento)
-        eventos.append(node.evento)
+        ids.append(node.event.id_evento)
+        eventos.append(node.event)
 
         recoger(node.left)
         recoger(node.right)
@@ -109,7 +109,7 @@ def previsualizar_archivo(sistema):
         if node is None:
             return None
 
-        if node.evento.id_evento == rama["raiz"].id_evento:
+        if node.event.id_evento == rama["raiz"].id_evento:
             return node
 
         resultado = buscar(node.left)
@@ -163,7 +163,7 @@ def archivar_rama(sistema):
             if node is None:
                 return None
 
-            if node.evento.id_evento == rama["raiz"].id_evento:
+            if node.event.id_evento == rama["raiz"].id_evento:
                 return node
 
             resultado = buscar(node.left)
@@ -182,7 +182,7 @@ def archivar_rama(sistema):
             if node is None:
                 return
 
-            eventos.append(node.evento)
+            eventos.append(node.event)
             recoger(node.left)
             recoger(node.right)
 
