@@ -333,6 +333,47 @@ class SistemaSismico:
             self._restaurar(estado_antes)
             raise
 
+    def actualizar_parametros(self, *, w=None, r=None, l=None, t=None):
+        estado_antes = self._snapshot()
+        try:
+            nuevos = self.parametros.copia()
+            if w is not None:
+                nuevos.set_w(w)
+            if r is not None:
+                nuevos.set_r(r)
+            if l is not None:
+                nuevos.set_l(l)
+            if t is not None:
+                nuevos.set_t(t)
+
+            cambiaron_asociaciones = (
+                nuevos.w != self.parametros.w
+                or nuevos.r != self.parametros.r
+            )
+            cambio_l = nuevos.l != self.parametros.l
+
+            if (
+                nuevos.w == self.parametros.w
+                and nuevos.r == self.parametros.r
+                and nuevos.l == self.parametros.l
+                and nuevos.t == self.parametros.t
+            ):
+                return False
+
+            self.escenario.parametros = nuevos
+            if cambiaron_asociaciones:
+                actualizar_asociaciones_de(self)
+            if cambiaron_asociaciones or cambio_l:
+                self.actualizar_marcas_acceso_costoso()
+
+            self.historial.registro_accion(
+                Accion("actualizar_parametros", estado_antes)
+            )
+            return True
+        except Exception:
+            self._restaurar(estado_antes)
+            raise
+
     # === COLA ===
 
     def encolar_reporte(self, reporte):

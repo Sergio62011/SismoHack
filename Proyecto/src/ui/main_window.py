@@ -40,6 +40,12 @@ from models.report import Reporte
 from services.sistema_sismico import SistemaSismico
 from services.historial import Accion
 from services.archivo import archivar_rama, previsualizar_archivo
+from services.consultas import (
+    primeros_k_pendientes,
+    eventos_por_magnitud,
+    eventos_por_profundidad_y_fecha,
+    asociaciones_de_evento,
+)
 from persistence.json_loader import JsonLoader, ErrorJsonPersistencia
 from persistence.json_saver import JsonSaver
 from persistence.versiones import (
@@ -156,6 +162,7 @@ class VentanaPrincipal(QMainWindow):
         pestanas.addTab(self._crear_mapa(), "Mapa y zonas")
         pestanas.addTab(self._crear_comparacion(), "AVL vs BST")
         pestanas.addTab(self._crear_historico(), "Histórico")
+        pestanas.addTab(self._crear_consultas(), "Consultas")
         pestanas.addTab(self._crear_versiones(), "Versiones")
         pestanas.addTab(self._crear_auditoria(), "Auditoría")
         layout.addWidget(pestanas, 1)
@@ -632,6 +639,255 @@ class VentanaPrincipal(QMainWindow):
         layout = QVBoxLayout(pagina)
         layout.addWidget(division)
         return pagina
+
+    def _crear_consultas(self):
+        pagina = QWidget()
+        layout = QVBoxLayout(pagina)
+
+        parametros = QGroupBox("Parámetros del escenario")
+        parametros_layout = QHBoxLayout(parametros)
+
+        self.campo_w = QDoubleSpinBox()
+        self.campo_w.setRange(0.1, 100000.0)
+        self.campo_w.setDecimals(1)
+        self.campo_w.setValue(self.sistema.parametros.w)
+
+        self.campo_r = QDoubleSpinBox()
+        self.campo_r.setRange(0.1, 100000.0)
+        self.campo_r.setDecimals(1)
+        self.campo_r.setValue(self.sistema.parametros.r)
+
+        self.campo_l = QSpinBox()
+        self.campo_l.setRange(0, 999999)
+        self.campo_l.setValue(self.sistema.parametros.l)
+
+        self.campo_t = QDoubleSpinBox()
+        self.campo_t.setRange(0.1, 100000.0)
+        self.campo_t.setDecimals(1)
+        self.campo_t.setValue(self.sistema.parametros.t)
+
+        parametros_layout.addWidget(QLabel("W (h)"))
+        parametros_layout.addWidget(self.campo_w)
+        parametros_layout.addWidget(QLabel("R (km)"))
+        parametros_layout.addWidget(self.campo_r)
+        parametros_layout.addWidget(QLabel("L"))
+        parametros_layout.addWidget(self.campo_l)
+        parametros_layout.addWidget(QLabel("T (h)"))
+        parametros_layout.addWidget(self.campo_t)
+
+        boton_parametros = QPushButton("Aplicar parámetros")
+        boton_parametros.clicked.connect(self.aplicar_parametros)
+        parametros_layout.addWidget(boton_parametros)
+        layout.addWidget(parametros)
+
+        consultas = QSplitter(Qt.Orientation.Horizontal)
+
+        izquierda = QWidget()
+        izquierda_layout = QVBoxLayout(izquierda)
+
+        grupo_k = QGroupBox("Primeros k pendientes — K descendente")
+        grupo_k_layout = QVBoxLayout(grupo_k)
+        fila_k = QHBoxLayout()
+        self.campo_k_consulta = QSpinBox()
+        self.campo_k_consulta.setRange(1, 999999)
+        self.campo_k_consulta.setValue(5)
+        boton_k = QPushButton("Consultar")
+        boton_k.clicked.connect(self.consultar_primeros_k)
+        fila_k.addWidget(QLabel("k:"))
+        fila_k.addWidget(self.campo_k_consulta)
+        fila_k.addWidget(boton_k)
+        grupo_k_layout.addLayout(fila_k)
+        self.texto_consulta_k = QTextEdit()
+        self.texto_consulta_k.setReadOnly(True)
+        grupo_k_layout.addWidget(self.texto_consulta_k)
+        izquierda_layout.addWidget(grupo_k, 1)
+
+        grupo_m = QGroupBox("Eventos por intervalo de magnitud")
+        grupo_m_layout = QVBoxLayout(grupo_m)
+        fila_m = QHBoxLayout()
+        self.campo_m_min = self._campo_decimal(-2, 10)
+        self.campo_m_max = self._campo_decimal(-2, 10)
+        self.campo_m_min.setValue(-2.0)
+        self.campo_m_max.setValue(10.0)
+        boton_m = QPushButton("Consultar")
+        boton_m.clicked.connect(self.consultar_magnitud)
+        fila_m.addWidget(QLabel("Min:"))
+        fila_m.addWidget(self.campo_m_min)
+        fila_m.addWidget(QLabel("Max:"))
+        fila_m.addWidget(self.campo_m_max)
+        fila_m.addWidget(boton_m)
+        grupo_m_layout.addLayout(fila_m)
+        self.texto_consulta_m = QTextEdit()
+        self.texto_consulta_m.setReadOnly(True)
+        grupo_m_layout.addWidget(self.texto_consulta_m)
+        izquierda_layout.addWidget(grupo_m, 1)
+
+        consultas.addWidget(izquierda)
+
+        derecha = QWidget()
+        derecha_layout = QVBoxLayout(derecha)
+
+        grupo_pf = QGroupBox("Profundidad y rango de fechas")
+        grupo_pf_layout = QVBoxLayout(grupo_pf)
+        form_pf = QFormLayout()
+        self.campo_profundidad_consulta = self._campo_decimal(0, 700)
+        self.campo_profundidad_consulta.setValue(700.0)
+        self.campo_fecha_inicio_consulta = QDateTimeEdit()
+        self.campo_fecha_fin_consulta = QDateTimeEdit()
+        for campo in (self.campo_fecha_inicio_consulta, self.campo_fecha_fin_consulta):
+            campo.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+            campo.setCalendarPopup(True)
+            campo.setDateTime(self._qdatetime_del_reloj())
+        form_pf.addRow("Profundidad máx. (km)", self.campo_profundidad_consulta)
+        form_pf.addRow("Desde UTC", self.campo_fecha_inicio_consulta)
+        form_pf.addRow("Hasta UTC", self.campo_fecha_fin_consulta)
+        grupo_pf_layout.addLayout(form_pf)
+        boton_pf = QPushButton("Consultar")
+        boton_pf.clicked.connect(self.consultar_profundidad_fecha)
+        grupo_pf_layout.addWidget(boton_pf)
+        self.texto_consulta_pf = QTextEdit()
+        self.texto_consulta_pf.setReadOnly(True)
+        grupo_pf_layout.addWidget(self.texto_consulta_pf)
+        derecha_layout.addWidget(grupo_pf, 1)
+
+        grupo_a = QGroupBox("Asociaciones")
+        grupo_a_layout = QVBoxLayout(grupo_a)
+        fila_a = QHBoxLayout()
+        self.campo_id_asociaciones = QSpinBox()
+        self.campo_id_asociaciones.setRange(1, 999999)
+        boton_a = QPushButton("Consultar asociaciones")
+        boton_a.clicked.connect(self.consultar_asociaciones)
+        fila_a.addWidget(QLabel("ID:"))
+        fila_a.addWidget(self.campo_id_asociaciones)
+        fila_a.addWidget(boton_a)
+        grupo_a_layout.addLayout(fila_a)
+        self.texto_asociaciones = QTextEdit()
+        self.texto_asociaciones.setReadOnly(True)
+        grupo_a_layout.addWidget(self.texto_asociaciones)
+        derecha_layout.addWidget(grupo_a, 1)
+
+        consultas.addWidget(derecha)
+        consultas.setSizes([600, 600])
+        layout.addWidget(consultas, 1)
+        return pagina
+
+    def aplicar_parametros(self):
+        try:
+            cambio = self.sistema.actualizar_parametros(
+                w=self.campo_w.value(),
+                r=self.campo_r.value(),
+                l=self.campo_l.value(),
+                t=self.campo_t.value(),
+            )
+            mensaje = "Parámetros actualizados" if cambio else "Sin cambios en los parámetros"
+            self.statusBar().showMessage(mensaje, 4000)
+            self.actualizar_vistas()
+        except ValueError as error:
+            self._mostrar_error(str(error))
+
+    @staticmethod
+    def _texto_eventos_consulta(eventos):
+        if not eventos:
+            return "Sin resultados."
+        return "\n".join(
+            f"SIS-{evento.id_evento:06d} | K={evento.calcular_clave()} | "
+            f"M={evento.magnitud:.1f} | H={evento.profundidad:.1f} | "
+            f"{evento.estado}"
+            for evento in eventos
+        )
+
+    def consultar_primeros_k(self):
+        try:
+            resultado = primeros_k_pendientes(
+                self.sistema, self.campo_k_consulta.value()
+            )
+            self.texto_consulta_k.setPlainText(
+                f"Nodos AVL examinados: {resultado['nodos_examinados']}\n\n"
+                + self._texto_eventos_consulta(resultado["eventos"])
+            )
+        except ValueError as error:
+            self._mostrar_error(str(error))
+
+    def consultar_magnitud(self):
+        try:
+            resultado = eventos_por_magnitud(
+                self.sistema,
+                self.campo_m_min.value(),
+                self.campo_m_max.value(),
+            )
+            self.texto_consulta_m.setPlainText(
+                f"Nodos AVL examinados: {resultado['nodos_examinados']}\n\n"
+                + self._texto_eventos_consulta(resultado["eventos"])
+            )
+        except ValueError as error:
+            self._mostrar_error(str(error))
+
+    def consultar_profundidad_fecha(self):
+        try:
+            fecha_inicio = self._leer_fecha(self.campo_fecha_inicio_consulta)
+            fecha_fin = self._leer_fecha(self.campo_fecha_fin_consulta)
+            resultado = eventos_por_profundidad_y_fecha(
+                self.sistema,
+                self.campo_profundidad_consulta.value(),
+                fecha_inicio,
+                fecha_fin,
+            )
+            self.texto_consulta_pf.setPlainText(
+                f"Nodos AVL examinados: {resultado['nodos_examinados']}\n\n"
+                + self._texto_eventos_consulta(resultado["eventos"])
+            )
+        except ValueError as error:
+            self._mostrar_error(str(error))
+
+    def consultar_asociaciones(self):
+        try:
+            resultado = asociaciones_de_evento(
+                self.sistema, self.campo_id_asociaciones.value()
+            )
+            evento = resultado["evento"]
+            referencia = resultado["referencia"]
+            lineas = [
+                f"Evento: SIS-{evento.id_evento:06d} ({resultado['estado']})",
+                f"Nodos AVL examinados: {resultado['nodos_examinados']}",
+                "",
+                "Candidatos:",
+            ]
+            if resultado["candidatos"]:
+                lineas.extend(
+                    f"- SIS-{item['evento'].id_evento:06d} | "
+                    f"M={item['evento'].magnitud:.1f} | {item['estado']}"
+                    for item in resultado["candidatos"]
+                )
+            else:
+                lineas.append("- Ninguno")
+
+            lineas.append("")
+            if referencia is None:
+                lineas.append("Referencia elegida: ninguna")
+            else:
+                estado_ref = (
+                    "activo"
+                    if referencia.id_evento in self.sistema._eventos_activos
+                    else "archivado"
+                )
+                lineas.append(
+                    f"Referencia elegida: SIS-{referencia.id_evento:06d} "
+                    f"({estado_ref})"
+                )
+
+            lineas.append("")
+            lineas.append("Eventos que lo utilizan como referencia:")
+            if resultado["referenciados_por"]:
+                lineas.extend(
+                    f"- SIS-{item['evento'].id_evento:06d} | {item['estado']}"
+                    for item in resultado["referenciados_por"]
+                )
+            else:
+                lineas.append("- Ninguno")
+
+            self.texto_asociaciones.setPlainText("\n".join(lineas))
+        except ValueError as error:
+            self._mostrar_error(str(error))
 
     def _crear_versiones(self):
         pagina = QWidget()

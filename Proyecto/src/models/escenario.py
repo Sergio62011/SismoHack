@@ -66,7 +66,7 @@ class Reloj:
 class Parametros:
     """Parámetros configurables del escenario: W, R, L, T."""
 
-    def __init__(self, w=24.0, r=100.0, l=3, t=72.0):
+    def __init__(self, w=48.0, r=40.0, l=3, t=72.0):
         self.w = self._validar_positivo("W", w)
         self.r = self._validar_positivo("R", r)
         self.l = self._validar_entero_no_negativo("L", l)

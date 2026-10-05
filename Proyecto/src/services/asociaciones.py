@@ -23,6 +23,9 @@ def _distancia(evento_a, evento_b):
 
 
 def es_candidato(evento_a, evento_b, w_horas, r_km):
+    if w_horas < 0 or r_km < 0:
+        return False
+
     if evento_a.id_evento == evento_b.id_evento:
         return False
 
