@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QScrollArea,
+    QDialog,
+    QDialogButtonBox 
 )
 
 from models.map import Zona
@@ -54,6 +56,112 @@ from persistence.versiones import (
 )
 from structure.bst import BST
 from services.auditoria import verificar_estructura
+
+class DialogoCorregirEvento(QDialog):
+    """Diálogo modal para corregir los datos de un evento activo."""
+
+    def __init__(self, evento, parent=None):
+        super().__init__(parent)
+        self.evento = evento
+        self.setWindowTitle(f"Corregir evento SIS-{evento.id_evento:06d}")
+        self.setMinimumWidth(420)
+        self._crear_ui()
+
+    def _crear_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        # === Encabezado con info no editable ===
+        info = QLabel(
+            f"<b>ID:</b> {self.evento.id_evento}<br>"
+            f"<b>Revisión actual:</b> {self.evento.revision}<br>"
+            f"<b>Estado:</b> {self.evento.estado}<br>"
+            f"<b>Prioridad actual:</b> P{self.evento.prioridad}"
+        )
+        info.setStyleSheet(
+            "background: #e8eef4; padding: 10px; border-radius: 5px;"
+            "color: #172b4d;"
+        )
+        layout.addWidget(info)
+
+        # === Formulario editable ===
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.campo_magnitud = QDoubleSpinBox()
+        self.campo_magnitud.setRange(-2.0, 10.0)
+        self.campo_magnitud.setDecimals(1)
+        self.campo_magnitud.setSingleStep(0.1)
+        self.campo_magnitud.setValue(self.evento.magnitud)
+
+        self.campo_profundidad = QDoubleSpinBox()
+        self.campo_profundidad.setRange(0.0, 700.0)
+        self.campo_profundidad.setDecimals(1)
+        self.campo_profundidad.setSingleStep(0.1)
+        self.campo_profundidad.setValue(self.evento.profundidad)
+
+        self.campo_x = QDoubleSpinBox()
+        self.campo_x.setRange(0.0, 1000.0)
+        self.campo_x.setDecimals(1)
+        self.campo_x.setSingleStep(0.1)
+        self.campo_x.setValue(self.evento.x)
+
+        self.campo_y = QDoubleSpinBox()
+        self.campo_y.setRange(0.0, 1000.0)
+        self.campo_y.setDecimals(1)
+        self.campo_y.setSingleStep(0.1)
+        self.campo_y.setValue(self.evento.y)
+
+        self.campo_fecha = QDateTimeEdit()
+        self.campo_fecha.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.campo_fecha.setCalendarPopup(True)
+        self.campo_fecha.setDateTime(
+            QDateTime.fromString(
+                self.evento.fecha_hora.strftime("%Y-%m-%d %H:%M:%S"),
+                "yyyy-MM-dd HH:mm:ss",
+            )
+        )
+
+        form.addRow("Magnitud", self.campo_magnitud)
+        form.addRow("Profundidad (km)", self.campo_profundidad)
+        form.addRow("Coordenada X", self.campo_x)
+        form.addRow("Coordenada Y", self.campo_y)
+        form.addRow("Fecha UTC", self.campo_fecha)
+        layout.addLayout(form)
+
+        # === Nota ===
+        nota = QLabel(
+            "Al corregir, la revisión aumentará en 1 y el evento "
+            "volverá al estado 'pendiente'."
+        )
+        nota.setWordWrap(True)
+        nota.setStyleSheet("color: #52616f; font-size: 11px;")
+        layout.addWidget(nota)
+
+        # === Botones ===
+        botones = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        botones.button(QDialogButtonBox.StandardButton.Ok).setText("Corregir")
+        botones.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancelar")
+        botones.accepted.connect(self.accept)
+        botones.rejected.connect(self.reject)
+        layout.addWidget(botones)
+
+    def datos(self):
+        """Devuelve los nuevos datos del evento listos para el servicio."""
+        fecha = datetime.strptime(
+            self.campo_fecha.dateTime().toString("yyyy-MM-dd HH:mm:ss"),
+            "%Y-%m-%d %H:%M:%S",
+        ).replace(tzinfo=timezone.utc)
+        return {
+            "magnitud": self.campo_magnitud.value(),
+            "profundidad": self.campo_profundidad.value(),
+            "x": self.campo_x.value(),
+            "y": self.campo_y.value(),
+            "fecha_hora": fecha,
+        }
 
 class VistaArbolConZoom(QGraphicsView):
 
@@ -392,19 +500,37 @@ class VentanaPrincipal(QMainWindow):
         panel_layout = QVBoxLayout(panel)
         grupo_tabla = QGroupBox("Eventos activos")
         tabla_layout = QVBoxLayout(grupo_tabla)
-        self.tabla_eventos = self._crear_tabla(["ID", "Magnitud", "Prof.", "Prioridad", "Revision", "Estado", "Zona", "Costo"]
+        self.tabla_eventos = self._crear_tabla(
+            ["ID", "Magnitud", "Prof.", "Prioridad", "Revision",
+             "Estado", "Zona", "Costo"]
         )
-        self.tabla_eventos.itemSelectionChanged.connect(self._actualizar_botones_evento)
+        self.tabla_eventos.itemSelectionChanged.connect(
+            self._actualizar_botones_evento
+        )
+        self.tabla_eventos.itemDoubleClicked.connect(
+            lambda _item: self.corregir_evento()   # doble clic = corregir
+        )
         tabla_layout.addWidget(self.tabla_eventos)
         panel_layout.addWidget(grupo_tabla, 1)
+
         acciones = QHBoxLayout()
+
+        self.boton_corregir = QPushButton("Corregir evento")
+        self.boton_corregir.clicked.connect(self.corregir_evento)
+        self.boton_corregir.setEnabled(False)
+        acciones.addWidget(self.boton_corregir)
+
         self.boton_revisar = QPushButton("Marcar como revisado")
         self.boton_revisar.clicked.connect(self.marcar_revisado)
+        self.boton_revisar.setEnabled(False)
+        acciones.addWidget(self.boton_revisar)
+
         self.boton_eliminar = QPushButton("Eliminar evento")
         self.boton_eliminar.setStyleSheet("background: #ae3e3e;")
         self.boton_eliminar.clicked.connect(self.eliminar_evento)
-        acciones.addWidget(self.boton_revisar)
+        self.boton_eliminar.setEnabled(False)
         acciones.addWidget(self.boton_eliminar)
+
         acciones.addStretch()
         panel_layout.addLayout(acciones)
         division.addWidget(formulario)
@@ -1235,6 +1361,49 @@ class VentanaPrincipal(QMainWindow):
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
+            
+    def corregir_evento(self):
+        """Abre el diálogo de corrección para el evento seleccionado."""
+        event_id = self._id_seleccionado()
+        if event_id is None:
+            return
+
+        evento = self.sistema.buscar_por_id(event_id)
+        if evento is None:
+            self._mostrar_error(
+                f"El evento {event_id} no está activo."
+            )
+            return
+
+        dialogo = DialogoCorregirEvento(evento, parent=self)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        datos = dialogo.datos()
+
+        # Si no cambió nada, no hace falta corregir
+        if (
+            round(evento.magnitud, 1) == round(datos["magnitud"], 1)
+            and round(evento.profundidad, 1) == round(datos["profundidad"], 1)
+            and round(evento.x, 1) == round(datos["x"], 1)
+            and round(evento.y, 1) == round(datos["y"], 1)
+            and evento.fecha_hora == datos["fecha_hora"]
+        ):
+            self.statusBar().showMessage(
+                "Sin cambios: el evento no fue modificado", 4000
+            )
+            return
+
+        try:
+            self.sistema.corregir_evento(event_id, **datos)
+            self.statusBar().showMessage(
+                f"Evento {event_id} corregido "
+                f"(nueva revisión: {self.sistema.buscar_por_id(event_id).revision})",
+                5000,
+            )
+            self.actualizar_vistas()
+        except ValueError as error:
+            self._mostrar_error(str(error))
 
     def marcar_revisado(self):
         event_id = self._id_seleccionado()
@@ -1909,6 +2078,7 @@ class VentanaPrincipal(QMainWindow):
 
     def _actualizar_botones_evento(self):
         hay_seleccion = self._id_seleccionado() is not None
+        self.boton_corregir.setEnabled(hay_seleccion)
         self.boton_revisar.setEnabled(hay_seleccion)
         self.boton_eliminar.setEnabled(hay_seleccion)
 
