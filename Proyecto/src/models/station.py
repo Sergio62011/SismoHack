@@ -1,37 +1,37 @@
-class Estacion:
-    """Representa una estación sísmica del escenario."""
+class Station:
+    """Represents a seismic station of the scenario."""
 
-    def __init__(self, id_estacion: str, nombre: str):
-        if not isinstance(id_estacion, str) or not id_estacion.strip():
-            raise ValueError("El identificador de la estación no puede estar vacío.")
+    def __init__(self, station_id: str, name: str):
+        if not isinstance(station_id, str) or not station_id.strip():
+            raise ValueError("The station ID cannot be empty.")
 
-        if not isinstance(nombre, str) or not nombre.strip():
-            raise ValueError("El nombre de la estación no puede estar vacío.")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("The station name cannot be empty.")
 
-        self.id_estacion = id_estacion.strip()
-        self.nombre = nombre.strip()
+        self.station_id = station_id.strip()
+        self.name = name.strip()
 
     def to_dict(self):
         return {
-            "id_estacion": self.id_estacion,
-            "nombre": self.nombre,
+            "station_id": self.station_id,
+            "name": self.name,
         }
 
     @classmethod
     def from_dict(cls, data):
         return cls(
-            id_estacion=data["id_estacion"],
-            nombre=data["nombre"],
+            station_id=data["station_id"],
+            name=data["name"],
         )
 
-    def copia(self):
-        return Estacion(
-            self.id_estacion,
-            self.nombre,
+    def copy(self):
+        return Station(
+            self.station_id,
+            self.name,
         )
 
     def __repr__(self):
         return (
-            f"Estacion(id={self.id_estacion}, "
-            f"nombre={self.nombre})"
+            f"Station(id={self.station_id}, "
+            f"name={self.name})"
         )

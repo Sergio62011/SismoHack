@@ -1,68 +1,67 @@
-# models/report.py
 from datetime import datetime, timezone
 
 
-class Reporte:
+class Report:
     """Incoming station report before the system decides what to do with it."""
 
     def __init__(
         self,
-        id_evento: int,
-        magnitud: float,
-        profundidad: float,
+        event_id: int,
+        magnitude: float,
+        depth: float,
         x: float,
         y: float,
-        fecha_hora: datetime,
+        datetime: datetime,
         revision: int,
-        estacion: str,
+        station: str,
     ):
-        self.id_evento = id_evento
-        self.magnitud = magnitud
-        self.profundidad = profundidad
+        self.event_id = event_id
+        self.magnitude = magnitude
+        self.depth = depth
         self.x = x
         self.y = y
-        self.fecha_hora = fecha_hora
+        self.datetime = datetime
         self.revision = revision
-        self.estacion = estacion
+        self.station = station
 
-    # === Persistencia y copia ===
+    # === Persistence and copy ===
 
     def to_dict(self):
         return {
-            "id_evento": self.id_evento,
-            "magnitud": self.magnitud,
-            "profundidad": self.profundidad,
+            "event_id": self.event_id,
+            "magnitude": self.magnitude,
+            "depth": self.depth,
             "x": self.x,
             "y": self.y,
-            "fecha_hora": self.fecha_hora.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "datetime": self.datetime.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "revision": self.revision,
-            "estacion": self.estacion,
+            "station": self.station,
         }
 
     @classmethod
     def from_dict(cls, data):
-        fecha = datetime.strptime(
-            data["fecha_hora"], "%Y-%m-%dT%H:%M:%SZ"
+        dt = datetime.strptime(
+            data["datetime"], "%Y-%m-%dT%H:%M:%SZ"
         ).replace(tzinfo=timezone.utc)
         return cls(
-            id_evento=data["id_evento"],
-            magnitud=data["magnitud"],
-            profundidad=data["profundidad"],
+            event_id=data["event_id"],
+            magnitude=data["magnitude"],
+            depth=data["depth"],
             x=data["x"],
             y=data["y"],
-            fecha_hora=fecha,
+            datetime=dt,
             revision=data["revision"],
-            estacion=data["estacion"],
+            station=data["station"],
         )
 
-    def copia(self):
-        return Reporte(
-            self.id_evento, self.magnitud, self.profundidad,
-            self.x, self.y, self.fecha_hora, self.revision, self.estacion,
+    def copy(self):
+        return Report(
+            self.event_id, self.magnitude, self.depth,
+            self.x, self.y, self.datetime, self.revision, self.station,
         )
 
     def __repr__(self):
         return (
-            f"Reporte(id={self.id_evento}, M={self.magnitud}, "
-            f"revision={self.revision}, estacion={self.estacion})"
+            f"Report(id={self.event_id}, M={self.magnitude}, "
+            f"revision={self.revision}, station={self.station})"
         )

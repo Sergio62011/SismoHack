@@ -1,161 +1,159 @@
-class Zona:
+class Zone:
     """Represents a rectangular zone inside the simulated map."""
 
-    def __init__(self, nombre, x_min, y_min, x_max, y_max, poblada):
-        self.nombre = nombre
+    def __init__(self, name, x_min, y_min, x_max, y_max, populated):
+        self.name = name
         self.x_min = float(x_min)
         self.y_min = float(y_min)
         self.x_max = float(x_max)
         self.y_max = float(y_max)
-        self.poblada = bool(poblada)
+        self.populated = bool(populated)
 
-    def contiene_punto(self, x, y):
+    def contains_point(self, x, y):
         """Returns True when the point is inside the zone or on its border."""
         return (
             self.x_min <= x <= self.x_max
             and self.y_min <= y <= self.y_max
         )
 
-    def simbolo(self):
-        return "P" if self.poblada else "N"
+    def symbol(self):
+        return "P" if self.populated else "N"
 
-    # === Persistencia y copia ===
+    # === Persistence and copy ===
 
     def to_dict(self):
         return {
-            "nombre": self.nombre,
+            "name": self.name,
             "x_min": self.x_min,
             "y_min": self.y_min,
             "x_max": self.x_max,
             "y_max": self.y_max,
-            "poblada": self.poblada,
+            "populated": self.populated,
         }
 
     @classmethod
     def from_dict(cls, data):
         return cls(
-            data["nombre"],
+            data["name"],
             data["x_min"], data["y_min"],
             data["x_max"], data["y_max"],
-            data["poblada"],
+            data["populated"],
         )
 
-    def copia(self):
-        return Zona(
-            self.nombre, self.x_min, self.y_min,
-            self.x_max, self.y_max, self.poblada,
+    def copy(self):
+        return Zone(
+            self.name, self.x_min, self.y_min,
+            self.x_max, self.y_max, self.populated,
         )
 
     def __repr__(self):
-        tipo = "poblada" if self.poblada else "no poblada"
-        return f"Zona({self.nombre}, {tipo})"
+        kind = "populated" if self.populated else "not populated"
+        return f"Zone({self.name}, {kind})"
 
 
-class MapaSismico:
+class SeismicMap:
     """Simple matrix map for zones and seismic events."""
 
-    def __init__(self, ancho_km=1000, alto_km=1000, filas=10, columnas=10):
-        self.ancho_km = ancho_km
-        self.alto_km = alto_km
-        self.filas = filas
-        self.columnas = columnas
-        self.zonas = []
+    def __init__(self, width_km=1000, height_km=1000, rows=10, columns=10):
+        self.width_km = width_km
+        self.height_km = height_km
+        self.rows = rows
+        self.columns = columns
+        self.zones = []
 
-    def agregar_zona(self, zona):
-        self.zonas.append(zona)
+    def add_zone(self, zone):
+        self.zones.append(zone)
 
-    def obtener_zonas_del_punto(self, x, y):
+    def zones_of_point(self, x, y):
         return [
-            zona
-            for zona in self.zonas
-            if zona.contiene_punto(float(x), float(y))
+            zone
+            for zone in self.zones
+            if zone.contains_point(float(x), float(y))
         ]
 
-    def esta_en_zona_poblada(self, x, y):
-        zonas_del_punto = self.obtener_zonas_del_punto(x, y)
-        return any(zona.poblada for zona in zonas_del_punto)
+    def is_in_populated_zone(self, x, y):
+        zones_of_point = self.zones_of_point(x, y)
+        return any(zone.populated for zone in zones_of_point)
 
-    def asignar_zona_a_evento(self, evento):
-        evento.en_zona_poblada = self.esta_en_zona_poblada(evento.x, evento.y)
-        evento.recalcular_prioridad()
+    def assign_zone_to_event(self, event):
+        event.in_populated_zone = self.is_in_populated_zone(event.x, event.y)
+        event.recalculate_priority()
 
-    def convertir_coordenada_a_celda(self, x, y):
-        columna = int((float(x) / self.ancho_km) * self.columnas)
-        fila_desde_abajo = int((float(y) / self.alto_km) * self.filas)
+    def coordinate_to_cell(self, x, y):
+        column = int((float(x) / self.width_km) * self.columns)
+        row_from_bottom = int((float(y) / self.height_km) * self.rows)
 
-        columna = min(max(columna, 0), self.columnas - 1)
-        fila_desde_abajo = min(max(fila_desde_abajo, 0), self.filas - 1)
+        column = min(max(column, 0), self.columns - 1)
+        row_from_bottom = min(max(row_from_bottom, 0), self.rows - 1)
 
-        fila = (self.filas - 1) - fila_desde_abajo
-        return fila, columna
+        row = (self.rows - 1) - row_from_bottom
+        return row, column
 
-    def crear_matriz_vacia(self):
-        return [["." for _ in range(self.columnas)] for _ in range(self.filas)]
+    def empty_matrix(self):
+        return [["." for _ in range(self.columns)] for _ in range(self.rows)]
 
-    def crear_matriz_zonas(self):
-        matriz = self.crear_matriz_vacia()
-        for fila in range(self.filas):
-            for columna in range(self.columnas):
-                x, y = self._centro_de_celda(fila, columna)
-                zonas = self.obtener_zonas_del_punto(x, y)
-                if any(zona.poblada for zona in zonas):
-                    matriz[fila][columna] = "P"
-                elif len(zonas) > 0:
-                    matriz[fila][columna] = "N"
-        return matriz
+    def zones_matrix(self):
+        matrix = self.empty_matrix()
+        for row in range(self.rows):
+            for column in range(self.columns):
+                x, y = self._cell_center(row, column)
+                zones = self.zones_of_point(x, y)
+                if any(zone.populated for zone in zones):
+                    matrix[row][column] = "P"
+                elif len(zones) > 0:
+                    matrix[row][column] = "N"
+        return matrix
 
-    def crear_matriz_con_eventos(self, eventos):
-        matriz = self.crear_matriz_zonas()
-        for evento in eventos:
-            fila, columna = self.convertir_coordenada_a_celda(
-                evento.x, evento.y
-            )
-            matriz[fila][columna] = "E"
-        return matriz
+    def matrix_with_events(self, events):
+        matrix = self.zones_matrix()
+        for event in events:
+            row, column = self.coordinate_to_cell(event.x, event.y)
+            matrix[row][column] = "E"
+        return matrix
 
-    def imprimir_matriz(self, matriz):
+    def print_matrix(self, matrix):
         print(
-            "Leyenda: . = vacio | P = zona poblada | "
-            "N = zona no poblada | E = evento"
+            "Legend: . = empty | P = populated zone | "
+            "N = non-populated zone | E = event"
         )
-        for fila in matriz:
-            print(" ".join(fila))
+        for row in matrix:
+            print(" ".join(row))
 
-    def _centro_de_celda(self, fila, columna):
-        ancho_celda = self.ancho_km / self.columnas
-        alto_celda = self.alto_km / self.filas
-        x = (columna + 0.5) * ancho_celda
-        fila_desde_abajo = (self.filas - 1) - fila
-        y = (fila_desde_abajo + 0.5) * alto_celda
+    def _cell_center(self, row, column):
+        cell_width = self.width_km / self.columns
+        cell_height = self.height_km / self.rows
+        x = (column + 0.5) * cell_width
+        row_from_bottom = (self.rows - 1) - row
+        y = (row_from_bottom + 0.5) * cell_height
         return x, y
 
-    # === Persistencia y copia ===
+    # === Persistence and copy ===
 
     def to_dict(self):
         return {
-            "ancho_km": self.ancho_km,
-            "alto_km": self.alto_km,
-            "filas": self.filas,
-            "columnas": self.columnas,
-            "zonas": [z.to_dict() for z in self.zonas],
+            "width_km": self.width_km,
+            "height_km": self.height_km,
+            "rows": self.rows,
+            "columns": self.columns,
+            "zones": [z.to_dict() for z in self.zones],
         }
 
     @classmethod
     def from_dict(cls, data):
-        mapa = cls(
-            ancho_km=data["ancho_km"],
-            alto_km=data["alto_km"],
-            filas=data["filas"],
-            columnas=data["columnas"],
+        smap = cls(
+            width_km=data["width_km"],
+            height_km=data["height_km"],
+            rows=data["rows"],
+            columns=data["columns"],
         )
-        for z in data["zonas"]:
-            mapa.agregar_zona(Zona.from_dict(z))
-        return mapa
+        for z in data["zones"]:
+            smap.add_zone(Zone.from_dict(z))
+        return smap
 
-    def copia(self):
-        nuevo = MapaSismico(
-            self.ancho_km, self.alto_km, self.filas, self.columnas
+    def copy(self):
+        new = SeismicMap(
+            self.width_km, self.height_km, self.rows, self.columns
         )
-        for z in self.zonas:
-            nuevo.agregar_zona(z.copia())
-        return nuevo
+        for z in self.zones:
+            new.add_zone(z.copy())
+        return new

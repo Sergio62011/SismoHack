@@ -13,24 +13,24 @@ class AVL:
 
     def __init__(self):
         self.root = None
-        self.modo_estres = False
-        self.rotaciones_realizadas = 0
-        self.casos_ll = 0
-        self.casos_rr = 0
-        self.casos_lr = 0
-        self.casos_rl = 0
-        self.giros_simples_izquierda = 0
-        self.giros_simples_derecha = 0
-        self.rotaciones_ultima_operacion = []
-        self.pasadas_recuperacion = 0
-        self.nodos_visitados_recuperacion = 0
+        self.stress_mode = False
+        self.rotations_performed = 0
+        self.ll_cases = 0
+        self.rr_cases = 0
+        self.lr_cases = 0
+        self.rl_cases = 0
+        self.single_left_rotations = 0
+        self.single_right_rotations = 0
+        self.rotations_last_operation = []
+        self.recovery_passes = 0
+        self.recovery_nodes_visited = 0
 
     # =========================================================
     # INSERT
     # =========================================================
 
     def insert(self, event):
-        self.rotaciones_ultima_operacion = []
+        self.rotations_last_operation = []
 
         if self.root is None:
             self.root = Node(event)
@@ -55,11 +55,13 @@ class AVL:
                 node.right.parent = node
 
         else:
-            raise ValueError(f"Evento duplicado: clave {event.calcular_clave()}")
+            raise ValueError(
+                f"Duplicate event: key {event.calculate_key()}"
+            )
 
         node.update_height()
 
-        if self.modo_estres:
+        if self.stress_mode:
             return node
 
         return self._balance(node)
@@ -69,35 +71,35 @@ class AVL:
     # =========================================================
 
     def _balance(self, node):
-        fb = node.balance_factor
+        bf = node.balance_factor
 
-        if fb > 1 and node.left is not None and node.left.balance_factor >= 0:
-            self.rotaciones_ultima_operacion.append("LL")
-            self.casos_ll += 1
-            self.giros_simples_derecha += 1
+        if bf > 1 and node.left is not None and node.left.balance_factor >= 0:
+            self.rotations_last_operation.append("LL")
+            self.ll_cases += 1
+            self.single_right_rotations += 1
             return self._rotate_right(node)
 
-        if fb > 1 and node.left is not None and node.left.balance_factor < 0:
-            self.rotaciones_ultima_operacion.append("LR")
-            self.casos_lr += 1
-            self.giros_simples_izquierda += 1
-            self.giros_simples_derecha += 1
+        if bf > 1 and node.left is not None and node.left.balance_factor < 0:
+            self.rotations_last_operation.append("LR")
+            self.lr_cases += 1
+            self.single_left_rotations += 1
+            self.single_right_rotations += 1
             node.left = self._rotate_left(node.left)
             if node.left is not None:
                 node.left.parent = node
             return self._rotate_right(node)
 
-        if fb < -1 and node.right is not None and node.right.balance_factor <= 0:
-            self.rotaciones_ultima_operacion.append("RR")
-            self.casos_rr += 1
-            self.giros_simples_izquierda += 1
+        if bf < -1 and node.right is not None and node.right.balance_factor <= 0:
+            self.rotations_last_operation.append("RR")
+            self.rr_cases += 1
+            self.single_left_rotations += 1
             return self._rotate_left(node)
 
-        if fb < -1 and node.right is not None and node.right.balance_factor > 0:
-            self.rotaciones_ultima_operacion.append("RL")
-            self.casos_rl += 1
-            self.giros_simples_derecha += 1
-            self.giros_simples_izquierda += 1
+        if bf < -1 and node.right is not None and node.right.balance_factor > 0:
+            self.rotations_last_operation.append("RL")
+            self.rl_cases += 1
+            self.single_right_rotations += 1
+            self.single_left_rotations += 1
             node.right = self._rotate_right(node.right)
             if node.right is not None:
                 node.right.parent = node
@@ -127,7 +129,7 @@ class AVL:
         z.update_height()
         y.update_height()
 
-        self.rotaciones_realizadas += 1
+        self.rotations_performed += 1
         return y
 
     def _rotate_left(self, z):
@@ -148,7 +150,7 @@ class AVL:
         z.update_height()
         y.update_height()
 
-        self.rotaciones_realizadas += 1
+        self.rotations_performed += 1
         return y
 
     # =========================================================
@@ -162,7 +164,7 @@ class AVL:
         if node is None:
             return None
 
-        node_key = node.event.calcular_clave()
+        node_key = node.event.calculate_key()
 
         if key == node_key:
             return node
@@ -272,7 +274,7 @@ class AVL:
         if node is None:
             return -1
 
-        node_key = node.event.calcular_clave()
+        node_key = node.event.calculate_key()
         if key == node_key:
             return depth
         if key < node_key:
@@ -323,7 +325,7 @@ class AVL:
     # =========================================================
 
     def delete(self, key):
-        self.rotaciones_ultima_operacion = []
+        self.rotations_last_operation = []
         self.root = self._delete(self.root, key)
         if self.root is not None:
             self.root.parent = None
@@ -332,7 +334,7 @@ class AVL:
         if node is None:
             return None
 
-        node_key = node.event.calcular_clave()
+        node_key = node.event.calculate_key()
 
         if key < node_key:
             node.left = self._delete(node.left, key)
@@ -363,14 +365,14 @@ class AVL:
             successor = self.find_minimum(node.right)
             node.event = successor.event
             node.right = self._delete(
-                node.right, successor.event.calcular_clave()
+                node.right, successor.event.calculate_key()
             )
             if node.right is not None:
                 node.right.parent = node
 
         node.update_height()
 
-        if self.modo_estres:
+        if self.stress_mode:
             return node
 
         return self._balance(node)
@@ -379,21 +381,21 @@ class AVL:
     # STRESS MODE
     # =========================================================
 
-    def activar_modo_estres(self):
-        self.modo_estres = True
+    def enable_stress_mode(self):
+        self.stress_mode = True
 
-    def desactivar_modo_estres(self):
-        self.modo_estres = False
+    def disable_stress_mode(self):
+        self.stress_mode = False
 
     # =========================================================
     # GLOBAL RECOVERY
     # =========================================================
 
-    def recuperar_balance(self):
-        self.rotaciones_ultima_operacion = []
-        self.pasadas_recuperacion = 0
-        self.nodos_visitados_recuperacion = 0
-        self.modo_estres = False
+    def recover_balance(self):
+        self.rotations_last_operation = []
+        self.recovery_passes = 0
+        self.recovery_nodes_visited = 0
+        self.stress_mode = False
 
         if self.root is None:
             return
@@ -403,18 +405,18 @@ class AVL:
         while passes < max_passes:
             self.root = self._recover_pass(self.root)
             self.root.parent = None
-            self.pasadas_recuperacion += 1
+            self.recovery_passes += 1
             if self._is_avl(self.root):
                 break
             passes += 1
 
-        self.modo_estres = False
+        self.stress_mode = False
 
     def _recover_pass(self, node):
         if node is None:
             return None
 
-        self.nodos_visitados_recuperacion += 1
+        self.recovery_nodes_visited += 1
 
         node.left = self._recover_pass(node.left)
         if node.left is not None:
@@ -440,46 +442,46 @@ class AVL:
         if abs(node.balance_factor) > 1:
             return False
         return self._is_avl(node.left) and self._is_avl(node.right)
-    
-    def copia(self):
-        nuevo = AVL()
-        nuevo.modo_estres = self.modo_estres
-        nuevo.rotaciones_realizadas = self.rotaciones_realizadas
-        nuevo.rotaciones_ultima_operacion = list(self.rotaciones_ultima_operacion)
-        nuevo.casos_ll = self.casos_ll
-        nuevo.casos_rr = self.casos_rr
-        nuevo.casos_lr = self.casos_lr
-        nuevo.casos_rl = self.casos_rl
-        nuevo.giros_simples_izquierda = self.giros_simples_izquierda
-        nuevo.giros_simples_derecha = self.giros_simples_derecha
+
+    def copy(self):
+        new = AVL()
+        new.stress_mode = self.stress_mode
+        new.rotations_performed = self.rotations_performed
+        new.rotations_last_operation = list(self.rotations_last_operation)
+        new.ll_cases = self.ll_cases
+        new.rr_cases = self.rr_cases
+        new.lr_cases = self.lr_cases
+        new.rl_cases = self.rl_cases
+        new.single_left_rotations = self.single_left_rotations
+        new.single_right_rotations = self.single_right_rotations
 
         if self.root is not None:
-            nuevo.root = self.root.copia(nuevo_padre=None)
+            new.root = self.root.copy(new_parent=None)
 
-        return nuevo
-        
-    def dibujar(self, mostrar_info=False):
+        return new
+
+    def draw(self, show_info=False):
         if self.root is None:
-            print("El árbol está vacío")
+            print("The tree is empty")
             return
 
-        modo = "ESTRÉS" if self.modo_estres else "NORMAL"
-        print(f"\nÁrbol AVL [{modo}]:")
+        mode = "STRESS" if self.stress_mode else "NORMAL"
+        print(f"\nAVL tree [{mode}]:")
         print("-----------")
-        self._dibujar(self.root, "", "R", mostrar_info)
+        self._draw(self.root, "", "R", show_info)
 
-    def _dibujar(self, node, espacio, posicion, mostrar_info):
+    def _draw(self, node, space, position, show_info):
         if node is not None:
-            self._dibujar(node.right, espacio + "     ", "D", mostrar_info)
+            self._draw(node.right, space + "     ", "R", show_info)
 
-            if mostrar_info:
-                etiqueta = (
-                    f"{node.event.id_evento} "
+            if show_info:
+                label = (
+                    f"{node.event.event_id} "
                     f"(h={node.height}, fb={node.balance_factor})"
                 )
             else:
-                etiqueta = str(node.event.id_evento)
+                label = str(node.event.event_id)
 
-            print(espacio + posicion + "── " + etiqueta)
+            print(space + position + "── " + label)
 
-            self._dibujar(node.left, espacio + "     ", "I", mostrar_info)
+            self._draw(node.left, space + "     ", "L", show_info)

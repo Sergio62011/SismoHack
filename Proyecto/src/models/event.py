@@ -2,144 +2,144 @@ from datetime import datetime, timezone
 from typing import Set, Optional
 
 
-class Evento:
-    """Representa un evento sísmico con todos sus datos."""
-    
+class Event:
+    """Represents a seismic event with all its data."""
+
     def __init__(
         self,
-        id_evento: int,
-        magnitud: float,
-        profundidad: float,
+        event_id: int,
+        magnitude: float,
+        depth: float,
         x: float,
         y: float,
-        fecha_hora: datetime,
+        datetime: datetime,
         revision: int = 1,
-        estado: str = "pendiente",
-        zona_poblada: bool = False,
+        state: str = "pending",
+        populated_zone: bool = False,
     ):
-        self.id_evento = int(id_evento)
-        self.magnitud = float(magnitud)
-        self.profundidad = float(profundidad)
+        self.event_id = int(event_id)
+        self.magnitude = float(magnitude)
+        self.depth = float(depth)
         self.x = float(x)
         self.y = float(y)
-        self.fecha_hora = fecha_hora
-        
+        self.datetime = datetime
+
         self.revision = int(revision)
-        self.estado = estado
-        self.estaciones: Set[str] = set()
-        self.en_zona_poblada = zona_poblada
+        self.state = state
+        self.stations: Set[str] = set()
+        self.in_populated_zone = populated_zone
 
-        self.prioridad = self._calcular_prioridad()
-        self.acceso_costoso = False
+        self.priority = self._calculate_priority()
+        self.expensive_access = False
 
-        self.ubicacion = "activo"
+        self.location = "active"
 
-        self.referencia: Optional[int] = None
-        self.referenciado_por: Set[int] = set()
+        self.reference: Optional[int] = None
+        self.referenced_by: Set[int] = set()
 
-    # === Prioridad ===
+    # === Priority ===
 
-    def _calcular_prioridad(self) -> int:
-        if self.magnitud >= 6.0:
+    def _calculate_priority(self) -> int:
+        if self.magnitude >= 6.0:
             return 3
         if (
-            self.magnitud >= 4.5
-            and self.profundidad <= 30.0
-            and self.en_zona_poblada
+            self.magnitude >= 4.5
+            and self.depth <= 30.0
+            and self.in_populated_zone
         ):
             return 3
-        if self.magnitud >= 4.5:
+        if self.magnitude >= 4.5:
             return 2
         return 1
 
-    def recalcular_prioridad(self):
-        self.prioridad = self._calcular_prioridad()
+    def recalculate_priority(self):
+        self.priority = self._calculate_priority()
 
-    # === Clave ===
+    # === Key ===
 
-    def calcular_clave(self) -> tuple:
-        return (self.prioridad, self.magnitud, self.id_evento)
+    def calculate_key(self) -> tuple:
+        return (self.priority, self.magnitude, self.event_id)
 
-    # === Comparación ===
+    # === Comparison ===
 
-    def __lt__(self, otro):
-        return self.calcular_clave() < otro.calcular_clave()
+    def __lt__(self, other):
+        return self.calculate_key() < other.calculate_key()
 
-    def __eq__(self, otro):
-        return self.calcular_clave() == otro.calcular_clave()
+    def __eq__(self, other):
+        return self.calculate_key() == other.calculate_key()
 
     def __hash__(self):
-        return hash(self.id_evento)
+        return hash(self.event_id)
 
-    # === Persistencia y copia ===
+    # === Persistence and copy ===
 
     def to_dict(self):
         return {
-            "id_evento": self.id_evento,
-            "magnitud": self.magnitud,
-            "profundidad": self.profundidad,
+            "event_id": self.event_id,
+            "magnitude": self.magnitude,
+            "depth": self.depth,
             "x": self.x,
             "y": self.y,
-            "fecha_hora": self.fecha_hora.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "datetime": self.datetime.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "revision": self.revision,
-            "estado": self.estado,
-            "estaciones": sorted(self.estaciones),
-            "en_zona_poblada": self.en_zona_poblada,
-            "prioridad": self.prioridad,
-            "acceso_costoso": self.acceso_costoso,
-            "ubicacion": self.ubicacion,
-            "referencia": self.referencia,
-            "referenciado_por": sorted(self.referenciado_por),
+            "state": self.state,
+            "stations": sorted(self.stations),
+            "in_populated_zone": self.in_populated_zone,
+            "priority": self.priority,
+            "expensive_access": self.expensive_access,
+            "location": self.location,
+            "reference": self.reference,
+            "referenced_by": sorted(self.referenced_by),
         }
 
     @classmethod
     def from_dict(cls, data):
-        fecha = datetime.strptime(
-            data["fecha_hora"], "%Y-%m-%dT%H:%M:%SZ"
+        dt = datetime.strptime(
+            data["datetime"], "%Y-%m-%dT%H:%M:%SZ"
         ).replace(tzinfo=timezone.utc)
-        evento = cls(
-            id_evento=data["id_evento"],
-            magnitud=data["magnitud"],
-            profundidad=data["profundidad"],
+        event = cls(
+            event_id=data["event_id"],
+            magnitude=data["magnitude"],
+            depth=data["depth"],
             x=data["x"],
             y=data["y"],
-            fecha_hora=fecha,
+            datetime=dt,
             revision=data["revision"],
-            estado=data["estado"],
-            zona_poblada=data["en_zona_poblada"],
+            state=data["state"],
+            populated_zone=data["in_populated_zone"],
         )
-        evento.estaciones = set(data.get("estaciones", []))
-        evento.acceso_costoso = bool(data.get("acceso_costoso", False))
-        evento.ubicacion = data.get("ubicacion", "activo")
-        evento.referencia = data.get("referencia")
-        evento.referenciado_por = set(data.get("referenciado_por", []))
-        # Recalcular prioridad para asegurar consistencia
-        evento.recalcular_prioridad()
-        return evento
+        event.stations = set(data.get("stations", []))
+        event.expensive_access = bool(data.get("expensive_access", False))
+        event.location = data.get("location", "active")
+        event.reference = data.get("reference")
+        event.referenced_by = set(data.get("referenced_by", []))
+        # Recalculate priority to ensure consistency
+        event.recalculate_priority()
+        return event
 
-    def copia(self):
-        nuevo = Evento(
-            id_evento=self.id_evento,
-            magnitud=self.magnitud,
-            profundidad=self.profundidad,
+    def copy(self):
+        new = Event(
+            event_id=self.event_id,
+            magnitude=self.magnitude,
+            depth=self.depth,
             x=self.x,
             y=self.y,
-            fecha_hora=self.fecha_hora,
+            datetime=self.datetime,
             revision=self.revision,
-            estado=self.estado,
-            zona_poblada=self.en_zona_poblada,
+            state=self.state,
+            populated_zone=self.in_populated_zone,
         )
-        nuevo.estaciones = set(self.estaciones)
-        nuevo.acceso_costoso = self.acceso_costoso
-        nuevo.ubicacion = self.ubicacion
-        nuevo.referencia = self.referencia
-        nuevo.referenciado_por = set(self.referenciado_por)
-        nuevo.recalcular_prioridad()
-        return nuevo
+        new.stations = set(self.stations)
+        new.expensive_access = self.expensive_access
+        new.location = self.location
+        new.reference = self.reference
+        new.referenced_by = set(self.referenced_by)
+        new.recalculate_priority()
+        return new
 
     def __repr__(self):
         return (
-            f"Evento(id={self.id_evento}, M={self.magnitud}, "
-            f"H={self.profundidad}, P={self.prioridad}, "
-            f"clave={self.calcular_clave()})"
+            f"Event(id={self.event_id}, M={self.magnitude}, "
+            f"H={self.depth}, P={self.priority}, "
+            f"key={self.calculate_key()})"
         )

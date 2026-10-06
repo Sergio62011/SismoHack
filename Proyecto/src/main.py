@@ -1,270 +1,269 @@
 """
-SismoLab AVL - Demo y pruebas de integración.
+SismoLab AVL - Demo and integration tests.
 
-Cubre las secciones del enunciado que ya están implementadas:
-- Mapa y zonas (sección 3)
-- Cálculo de prioridad (sección 4)
-- Clave y comparación (sección 5)
-- Creación, consulta, corrección, eliminación (sección 6)
-- Cola FIFO de reportes (sección 8)
-- Rotaciones y recuperación (sección 8)
-- Comparación BST vs AVL (sección 12, parcial)
+Covers the sections of the specification that are already implemented:
+- Map and zones (section 3)
+- Priority calculation (section 4)
+- Key and comparison (section 5)
+- Create, query, correct, remove (section 6)
+- FIFO report queue (section 8)
+- Rotations and recovery (section 8)
+- BST vs AVL comparison (section 12, partial)
 """
 
 from datetime import datetime, timezone
 
 from structure.avl import AVL
 from structure.bst import BST
-from models.event import Evento
-from models.map import MapaSismico, Zona
-from models.report import Reporte
-from services.sistema_sismico import SistemaSismico
+from models.event import Event
+from models.map import SeismicMap, Zone
+from models.report import Report
+from services.seismic_system import SeismicSystem
 
 
 # =========================================================
-# UTILIDADES
+# UTILITIES
 # =========================================================
 
-def titulo(texto):
+def title(text):
     print("\n" + "=" * 65)
-    print(texto)
+    print(text)
     print("=" * 65)
 
 
-def subtitulo(texto):
-    print("\n--- " + texto + " ---")
+def subtitle(text):
+    print("\n--- " + text + " ---")
 
 
-def fecha_utc(y, mo, d, h=0, mi=0, s=0):
+def utc(y, mo, d, h=0, mi=0, s=0):
     return datetime(y, mo, d, h, mi, s, tzinfo=timezone.utc)
 
 
-def ev(id_evento, magnitud=5.0, profundidad=50.0,
-       x=100.0, y=100.0, poblada=False, hora=10):
-    return Evento(
-        id_evento=id_evento,
-        magnitud=magnitud,
-        profundidad=profundidad,
+def ev(event_id, magnitude=5.0, depth=50.0,
+       x=100.0, y=100.0, populated=False, hour=10):
+    return Event(
+        event_id=event_id,
+        magnitude=magnitude,
+        depth=depth,
         x=x,
         y=y,
-        fecha_hora=fecha_utc(2026, 9, 7, hora, 0, 0),
-        zona_poblada=poblada,
+        datetime=utc(2026, 9, 7, hour, 0, 0),
+        populated_zone=populated,
     )
 
 
-def mostrar_evento(evento):
-    if evento is None:
-        print("  (sin evento)")
+def show_event(event):
+    if event is None:
+        print("  (no event)")
         return
     print(
-        f"  ID={evento.id_evento} "
-        f"M={evento.magnitud} H={evento.profundidad} "
-        f"P={evento.prioridad} "
-        f"clave={evento.calcular_clave()} "
-        f"estado={evento.estado} "
-        f"ubicacion={evento.ubicacion} "
-        f"rev={evento.revision}"
+        f"  ID={event.event_id} "
+        f"M={event.magnitude} H={event.depth} "
+        f"P={event.priority} "
+        f"key={event.calculate_key()} "
+        f"state={event.state} "
+        f"location={event.location} "
+        f"rev={event.revision}"
     )
 
 
 # =========================================================
-# 1. MAPA Y ZONAS
+# 1. MAP AND ZONES
 # =========================================================
 
-def demo_mapa_y_zonas():
-    titulo("1. MAPA Y ZONAS (sección 3)")
+def demo_map_and_zones():
+    title("1. MAP AND ZONES (section 3)")
 
-    mapa = MapaSismico(filas=10, columnas=10)
-    mapa.agregar_zona(Zona("Ciudad Norte", 100, 600, 450, 900, True))
-    mapa.agregar_zona(Zona("Reserva Sur", 550, 100, 900, 350, False))
-    mapa.agregar_zona(Zona("Ciudad Centro", 250, 250, 550, 550, True))
+    smap = SeismicMap(rows=10, columns=10)
+    smap.add_zone(Zone("North City", 100, 600, 450, 900, True))
+    smap.add_zone(Zone("South Reserve", 550, 100, 900, 350, False))
+    smap.add_zone(Zone("Central City", 250, 250, 550, 550, True))
 
-    casos = [
-        # (x, y, descripción)
-        (300.0, 700.0, "dentro de Ciudad Norte"),
-        (700.0, 200.0, "dentro de Reserva Sur"),
-        (500.0, 500.0, "borde de Ciudad Centro"),
-        (100.0, 600.0, "borde de Ciudad Norte"),
-        (250.0, 250.0, "borde esquina de Ciudad Centro"),
-        (0.0, 0.0, "fuera de toda zona"),
-        (450.0, 900.0, "borde superior de Ciudad Norte"),
-        (450.0, 600.0, "borde entre Ciudad Norte y Ciudad Centro"),
+    cases = [
+        (300.0, 700.0, "inside North City"),
+        (700.0, 200.0, "inside South Reserve"),
+        (500.0, 500.0, "border of Central City"),
+        (100.0, 600.0, "border of North City"),
+        (250.0, 250.0, "corner border of Central City"),
+        (0.0, 0.0, "outside every zone"),
+        (450.0, 900.0, "top border of North City"),
+        (450.0, 600.0, "border between North City and Central City"),
     ]
 
-    for x, y, desc in casos:
-        pob = mapa.esta_en_zona_poblada(x, y)
-        print(f"  ({x}, {y}) -> zona_poblada={pob}  [{desc}]")
+    for x, y, desc in cases:
+        pop = smap.is_in_populated_zone(x, y)
+        print(f"  ({x}, {y}) -> populated_zone={pop}  [{desc}]")
 
-    subtitulo("Matriz del mapa con eventos")
-    eventos = [
+    subtitle("Map matrix with events")
+    events = [
         ev(101, 4.7, 20.0, 300.0, 700.0),
         ev(102, 5.1, 40.0, 700.0, 200.0),
         ev(103, 6.2, 15.0, 500.0, 500.0),
     ]
-    for e in eventos:
-        mapa.asignar_zona_a_evento(e)
+    for e in events:
+        smap.assign_zone_to_event(e)
         print(
-            f"  Evento {e.id_evento}: poblada={e.en_zona_poblada} "
-            f"P={e.prioridad} clave={e.calcular_clave()}"
+            f"  Event {e.event_id}: populated={e.in_populated_zone} "
+            f"P={e.priority} key={e.calculate_key()}"
         )
 
-    matriz = mapa.crear_matriz_con_eventos(eventos)
-    mapa.imprimir_matriz(matriz)
+    matrix = smap.matrix_with_events(events)
+    smap.print_matrix(matrix)
 
 
 # =========================================================
-# 2. PRIORIDAD Y CLAVE
+# 2. PRIORITY AND KEY
 # =========================================================
 
-def demo_prioridad_y_clave():
-    titulo("2. PRIORIDAD Y CLAVE (secciones 4 y 5)")
+def demo_priority_and_key():
+    title("2. PRIORITY AND KEY (sections 4 and 5)")
 
-    subtitulo("Límites exactos")
-    casos = [
-        (6.0, 100.0, False, 3, "M=6.0 exacto"),
-        (5.9, 100.0, False, 2, "M=5.9, no alta"),
-        (4.5, 30.0, True, 3, "M=4.5, H=30, poblada -> 3"),
-        (4.5, 30.0, False, 2, "M=4.5, H=30, no poblada -> 2"),
-        (4.5, 30.1, True, 2, "M=4.5, H=30.1, poblada -> 2"),
-        (4.5, 70.0, True, 2, "M=4.5, H=70, poblada -> 2"),
+    subtitle("Exact boundaries")
+    cases = [
+        (6.0, 100.0, False, 3, "M=6.0 exact"),
+        (5.9, 100.0, False, 2, "M=5.9, not high"),
+        (4.5, 30.0, True, 3, "M=4.5, H=30, populated -> 3"),
+        (4.5, 30.0, False, 2, "M=4.5, H=30, not populated -> 2"),
+        (4.5, 30.1, True, 2, "M=4.5, H=30.1, populated -> 2"),
+        (4.5, 70.0, True, 2, "M=4.5, H=70, populated -> 2"),
         (4.4, 10.0, True, 1, "M=4.4 -> 1"),
         (-2.0, 0.0, False, 1, "M=-2.0 -> 1"),
         (10.0, 700.0, False, 3, "M=10.0 -> 3"),
     ]
 
-    for m, h, pob, esperado, desc in casos:
-        e = ev(1, m, h, poblada=pob)
-        ok = "OK" if e.prioridad == esperado else "FALLO"
+    for m, h, pop, expected, desc in cases:
+        e = ev(1, m, h, populated=pop)
+        ok = "OK" if e.priority == expected else "FAIL"
         print(
-            f"  [{ok}] {desc}: P={e.prioridad} (esperado {esperado})"
+            f"  [{ok}] {desc}: P={e.priority} (expected {expected})"
         )
 
-    subtitulo("Comparación lexicográfica (ejemplo del PDF)")
-    raiz = ev(10, 5.2, 40.0)
-    raiz.prioridad = 3
-    raiz.magnitud = 5.2
+    subtitle("Lexicographic comparison (example from the PDF)")
+    root = ev(10, 5.2, 40.0)
+    root.priority = 3
+    root.magnitude = 5.2
 
-    entrantes = [
-        (ev(20, 5.8, 40.0), "izquierda", "(2, 5.8, 20) < (3, 5.2, 10)"),
-        (ev(30, 6.1, 40.0), "derecha",   "(3, 6.1, 30) > (3, 5.2, 10)"),
-        (ev(5, 5.2, 40.0),  "izquierda", "(3, 5.2, 5) < (3, 5.2, 10)"),
-        (ev(25, 5.2, 40.0), "derecha",   "(3, 5.2, 25) > (3, 5.2, 10)"),
+    incoming = [
+        (ev(20, 5.8, 40.0), "left", "(2, 5.8, 20) < (3, 5.2, 10)"),
+        (ev(30, 6.1, 40.0), "right", "(3, 6.1, 30) > (3, 5.2, 10)"),
+        (ev(5, 5.2, 40.0), "left", "(3, 5.2, 5) < (3, 5.2, 10)"),
+        (ev(25, 5.2, 40.0), "right", "(3, 5.2, 25) > (3, 5.2, 10)"),
     ]
 
-    for e, esperado, motivo in entrantes:
-        e.prioridad = 2 if "2," in motivo else 3
-        e.magnitud = float(motivo.split(",")[1].strip())
-        real = "izquierda" if e < raiz else "derecha"
-        ok = "OK" if real == esperado else "FALLO"
-        print(f"  [{ok}] {motivo}: {real}")
+    for e, expected, reason in incoming:
+        e.priority = 2 if "2," in reason else 3
+        e.magnitude = float(reason.split(",")[1].strip())
+        actual = "left" if e < root else "right"
+        ok = "OK" if actual == expected else "FAIL"
+        print(f"  [{ok}] {reason}: {actual}")
 
 
 # =========================================================
-# 3. AVL: ROTACIONES
+# 3. AVL: ROTATIONS
 # =========================================================
 
-def demo_rotaciones():
-    titulo("3. ROTACIONES AVL (sección 5)")
+def demo_rotations():
+    title("3. AVL ROTATIONS (section 5)")
 
-    casos = [
+    cases = [
         ("LL", [30, 20, 10]),
         ("RR", [10, 20, 30]),
         ("LR", [30, 10, 20]),
         ("RL", [10, 30, 20]),
     ]
 
-    for nombre, ids in casos:
-        subtitulo(f"Caso {nombre}: insertar {ids}")
+    for name, ids in cases:
+        subtitle(f"Case {name}: insert {ids}")
         avl = AVL()
         for i in ids:
             avl.insert(ev(i))
-        avl.dibujar(mostrar_info=True)
-        print(f"  Altura: {avl.height()}")
-        print(f"  Rotaciones registradas: {avl.rotaciones_ultima_operacion}")
-        print(f"  Inorden: {[e.id_evento for e in avl.in_order()]}")
-        print(f"  ¿AVL válido? {avl._is_avl(avl.root)}")
+        avl.draw(show_info=True)
+        print(f"  Height: {avl.height()}")
+        print(f"  Rotations registered: {avl.rotations_last_operation}")
+        print(f"  In-order: {[e.event_id for e in avl.in_order()]}")
+        print(f"  Is AVL valid? {avl._is_avl(avl.root)}")
 
 
 # =========================================================
-# 4. AVL: ELIMINACIÓN
+# 4. AVL: DELETION
 # =========================================================
 
-def demo_eliminacion():
-    titulo("4. ELIMINACIÓN AVL (secciones 6 y 10)")
+def demo_deletion():
+    title("4. AVL DELETION (sections 6 and 10)")
 
-    subtitulo("Eliminar raíz con dos hijos")
+    subtitle("Delete root with two children")
     avl = AVL()
     for i in [20, 10, 30, 5, 15, 25, 35]:
         avl.insert(ev(i))
 
-    print("  Antes:")
-    avl.dibujar(mostrar_info=True)
+    print("  Before:")
+    avl.draw(show_info=True)
 
     avl.delete((2, 5.0, 20))
-    print("  Después de eliminar la raíz (20):")
-    avl.dibujar(mostrar_info=True)
-    print(f"  Inorden: {[e.id_evento for e in avl.in_order()]}")
-    print(f"  ¿AVL válido? {avl._is_avl(avl.root)}")
+    print("  After deleting the root (20):")
+    avl.draw(show_info=True)
+    print(f"  In-order: {[e.event_id for e in avl.in_order()]}")
+    print(f"  Is AVL valid? {avl._is_avl(avl.root)}")
 
-    subtitulo("Eliminar hoja")
+    subtitle("Delete leaf")
     avl.delete((2, 5.0, 5))
-    print(f"  Inorden: {[e.id_evento for e in avl.in_order()]}")
-    print(f"  ¿AVL válido? {avl._is_avl(avl.root)}")
+    print(f"  In-order: {[e.event_id for e in avl.in_order()]}")
+    print(f"  Is AVL valid? {avl._is_avl(avl.root)}")
 
-    subtitulo("Eliminar nodo con un solo hijo")
+    subtitle("Delete node with one child")
     avl2 = AVL()
     for i in [20, 10, 30, 25]:
         avl2.insert(ev(i))
     avl2.delete((2, 5.0, 30))
-    print(f"  Inorden: {[e.id_evento for e in avl2.in_order()]}")
-    print(f"  ¿AVL válido? {avl2._is_avl(avl2.root)}")
+    print(f"  In-order: {[e.event_id for e in avl2.in_order()]}")
+    print(f"  Is AVL valid? {avl2._is_avl(avl2.root)}")
 
 
 # =========================================================
-# 5. MODO ESTRÉS Y RECUPERACIÓN
+# 5. STRESS MODE AND RECOVERY
 # =========================================================
 
-def demo_modo_estres():
-    titulo("5. MODO ESTRÉS Y RECUPERACIÓN GLOBAL (sección 8)")
+def demo_stress_mode():
+    title("5. STRESS MODE AND GLOBAL RECOVERY (section 8)")
 
     avl = AVL()
-    avl.activar_modo_estres()
-    print(f"  Modo estrés activo: {avl.modo_estres}")
+    avl.enable_stress_mode()
+    print(f"  Stress mode active: {avl.stress_mode}")
 
     for i in [10, 20, 30, 40, 50, 60, 70, 80]:
         avl.insert(ev(i))
 
-    subtitulo("Árbol en estrés (sin rotaciones)")
-    avl.dibujar(mostrar_info=True)
-    print(f"  Altura: {avl.height()}")
-    print(f"  ¿AVL válido? {avl._is_avl(avl.root)}")
+    subtitle("Tree in stress mode (no rotations)")
+    avl.draw(show_info=True)
+    print(f"  Height: {avl.height()}")
+    print(f"  Is AVL valid? {avl._is_avl(avl.root)}")
 
-    subtitulo("Recuperación global")
-    avl.recuperar_balance()
-    avl.dibujar(mostrar_info=True)
-    print(f"  Altura: {avl.height()}")
-    print(f"  ¿AVL válido? {avl._is_avl(avl.root)}")
-    print(f"  Inorden: {[e.id_evento for e in avl.in_order()]}")
+    subtitle("Global recovery")
+    avl.recover_balance()
+    avl.draw(show_info=True)
+    print(f"  Height: {avl.height()}")
+    print(f"  Is AVL valid? {avl._is_avl(avl.root)}")
+    print(f"  In-order: {[e.event_id for e in avl.in_order()]}")
 
-    subtitulo("Desbalance mayor que 2")
+    subtitle("Imbalance greater than 2")
     avl2 = AVL()
-    avl2.activar_modo_estres()
+    avl2.enable_stress_mode()
     for i in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
         avl2.insert(ev(i))
-    print(f"  Altura en estrés: {avl2.height()}")
-    raiz = avl2.root
-    print(f"  Factor de balance de la raíz: {raiz.balance_factor}")
-    avl2.recuperar_balance()
-    print(f"  Altura tras recuperar: {avl2.height()}")
-    print(f"  ¿AVL válido? {avl2._is_avl(avl2.root)}")
+    print(f"  Height in stress: {avl2.height()}")
+    root = avl2.root
+    print(f"  Root balance factor: {root.balance_factor}")
+    avl2.recover_balance()
+    print(f"  Height after recovery: {avl2.height()}")
+    print(f"  Is AVL valid? {avl2._is_avl(avl2.root)}")
 
 
 # =========================================================
-# 6. COMPARACIÓN BST VS AVL
+# 6. BST VS AVL COMPARISON
 # =========================================================
 
 def demo_bst_vs_avl():
-    titulo("6. COMPARACIÓN BST vs AVL (sección 12)")
+    title("6. BST vs AVL COMPARISON (section 12)")
 
     ids = list(range(1, 16))
 
@@ -277,237 +276,237 @@ def demo_bst_vs_avl():
         bst.insert(e1)
         avl.insert(e2)
 
-    subtitulo("BST")
-    bst.dibujar()
-    print(f"  Altura BST: {bst.height()}")
-    print(f"  Hojas BST: {bst.number_of_leaves()}")
-    print(f"  Nodos BST: {bst.size()}")
+    subtitle("BST")
+    bst.draw()
+    print(f"  BST height: {bst.height()}")
+    print(f"  BST leaves: {bst.number_of_leaves()}")
+    print(f"  BST nodes: {bst.size()}")
 
-    subtitulo("AVL")
-    avl.dibujar(mostrar_info=True)
-    print(f"  Altura AVL: {avl.height()}")
-    print(f"  Hojas AVL: {avl.number_of_leaves()}")
-    print(f"  Nodos AVL: {avl.size()}")
-    print(f"  Rotaciones totales: {avl.rotaciones_realizadas}")
+    subtitle("AVL")
+    avl.draw(show_info=True)
+    print(f"  AVL height: {avl.height()}")
+    print(f"  AVL leaves: {avl.number_of_leaves()}")
+    print(f"  AVL nodes: {avl.size()}")
+    print(f"  Total rotations: {avl.rotations_performed}")
 
-    subtitulo("Comparación")
-    print(f"  BST altura = {bst.height()}, AVL altura = {avl.height()}")
+    subtitle("Comparison")
+    print(f"  BST height = {bst.height()}, AVL height = {avl.height()}")
     print(
-        f"  Inorden BST == Inorden AVL: "
-        f"{[e.id_evento for e in bst.in_order()] == [e.id_evento for e in avl.in_order()]}"
+        f"  BST in-order == AVL in-order: "
+        f"{[e.event_id for e in bst.in_order()] == [e.event_id for e in avl.in_order()]}"
     )
 
 
 # =========================================================
-# 7. SISTEMA: CREAR, CONSULTAR, CORREGIR, ELIMINAR
+# 7. SYSTEM: CREATE, QUERY, CORRECT, REMOVE
 # =========================================================
 
-def demo_sistema_crud():
-    titulo("7. CRUD EN EL SISTEMA (sección 6)")
+def demo_system_crud():
+    title("7. CRUD IN THE SYSTEM (section 6)")
 
-    sistema = SistemaSismico()
-    fecha = fecha_utc(2026, 9, 7, 10, 0, 0)
+    system = SeismicSystem()
+    date = utc(2026, 9, 7, 10, 0, 0)
 
-    subtitulo("Crear eventos")
-    sistema.crear_evento(10, 5.2, 40.0, 200.0, 300.0, fecha, "ST-01")
-    sistema.crear_evento(20, 6.5, 15.0, 500.0, 500.0, fecha, "ST-01")
-    sistema.crear_evento(30, 4.0, 60.0, 700.0, 200.0, fecha, "ST-02")
+    subtitle("Create events")
+    system.create_event(10, 5.2, 40.0, 200.0, 300.0, date, "ST-01")
+    system.create_event(20, 6.5, 15.0, 500.0, 500.0, date, "ST-01")
+    system.create_event(30, 4.0, 60.0, 700.0, 200.0, date, "ST-02")
 
     for eid in [10, 20, 30]:
-        mostrar_evento(sistema.buscar_por_id(eid))
+        show_event(system.find_by_id(eid))
 
-    subtitulo("Consultar evento activo")
-    consulta = sistema.consultar_evento(20)
-    print(f"  Estado: {consulta['estado']}")
-    mostrar_evento(consulta["evento"])
+    subtitle("Query active event")
+    query = system.query_event(20)
+    print(f"  State: {query['state']}")
+    show_event(query["event"])
 
-    subtitulo("Corregir evento 10 (M 5.2 -> 6.2, H 40 -> 15)")
-    sistema.corregir_evento(10, magnitud=6.2, profundidad=15.0)
-    mostrar_evento(sistema.buscar_por_id(10))
+    subtitle("Correct event 10 (M 5.2 -> 6.2, H 40 -> 15)")
+    system.correct_event(10, magnitude=6.2, depth=15.0)
+    show_event(system.find_by_id(10))
 
-    subtitulo("Marcar revisado evento 20")
-    sistema.marcar_revisado(20)
-    mostrar_evento(sistema.buscar_por_id(20))
+    subtitle("Mark event 20 as reviewed")
+    system.mark_reviewed(20)
+    show_event(system.find_by_id(20))
 
-    subtitulo("Eliminar evento 30")
-    sistema.eliminar_evento(30)
-    print(f"  Consulta 30: {sistema.consultar_evento(30)['estado']}")
+    subtitle("Remove event 30")
+    system.remove_event(30)
+    print(f"  Query 30: {system.query_event(30)['state']}")
 
-    subtitulo("Intentar reutilizar ID eliminado")
+    subtitle("Try to reuse a removed ID")
     try:
-        sistema.crear_evento(30, 5.0, 10.0, 100.0, 100.0, fecha, "ST-03")
-        print("  ERROR: no debería permitir reutilizar el ID")
+        system.create_event(30, 5.0, 10.0, 100.0, 100.0, date, "ST-03")
+        print("  ERROR: it should not allow reusing the ID")
     except ValueError as e:
         print(f"  OK: {e}")
 
-    subtitulo("Intentar duplicar ID activo")
+    subtitle("Try to duplicate an active ID")
     try:
-        sistema.crear_evento(10, 5.0, 10.0, 100.0, 100.0, fecha, "ST-04")
-        print("  ERROR: no debería permitir duplicar")
+        system.create_event(10, 5.0, 10.0, 100.0, 100.0, date, "ST-04")
+        print("  ERROR: it should not allow duplicating")
     except ValueError as e:
         print(f"  OK: {e}")
 
 
 # =========================================================
-# 8. COLA FIFO DE REPORTES
+# 8. FIFO REPORT QUEUE
 # =========================================================
 
-def imprimir_resultado_reporte(numero, resultado):
-    evento = resultado["evento"]
-    eid = evento.id_evento if evento is not None else "None"
-    print(f"\n  Paso {numero}")
-    print(f"    Decisión: {resultado['decision']}")
-    print(f"    Mensaje:  {resultado['mensaje']}")
-    print(f"    Evento:   {eid}")
-    print(f"    Rotaciones: {resultado['rotaciones']}")
-    if "reporte" in resultado:
-        print(f"    Reporte: {resultado['reporte']}")
-        print(f"    Pendientes restantes: {resultado['pendientes_restantes']}")
+def print_report_result(number, result):
+    event = result["event"]
+    eid = event.event_id if event is not None else "None"
+    print(f"\n  Step {number}")
+    print(f"    Decision: {result['decision']}")
+    print(f"    Message:  {result['message']}")
+    print(f"    Event:    {eid}")
+    print(f"    Rotations: {result['rotations']}")
+    if "report" in result:
+        print(f"    Report: {result['report']}")
+        print(f"    Remaining pending: {result['remaining_pending']}")
 
 
-def demo_reportes():
-    titulo("8. COLA FIFO DE REPORTES (secciones 6 y 8)")
+def demo_reports():
+    title("8. FIFO REPORT QUEUE (sections 6 and 8)")
 
-    sistema = SistemaSismico()
-    fecha = fecha_utc(2026, 9, 7, 10, 0, 0)
+    system = SeismicSystem()
+    date = utc(2026, 9, 7, 10, 0, 0)
 
-    reportes = [
-        Reporte(10, 5.0, 40.0, 100.0, 100.0, fecha, 1, "ST-01"),
-        Reporte(10, 5.0, 40.0, 100.0, 100.0, fecha, 1, "ST-02"),  # confirmación
-        Reporte(10, 6.2, 15.0, 100.0, 100.0, fecha, 2, "ST-03"),  # corrección
-        Reporte(10, 6.5, 15.0, 100.0, 100.0, fecha, 2, "ST-04"),  # conflicto
-        Reporte(10, 5.0, 40.0, 100.0, 100.0, fecha, 1, "ST-05"),  # antiguo
-        Reporte(20, 6.0, 10.0, 200.0, 200.0, fecha, 1, "ST-06"),  # nuevo
+    reports = [
+        Report(10, 5.0, 40.0, 100.0, 100.0, date, 1, "ST-01"),
+        Report(10, 5.0, 40.0, 100.0, 100.0, date, 1, "ST-02"),  # confirmation
+        Report(10, 6.2, 15.0, 100.0, 100.0, date, 2, "ST-03"),  # correction
+        Report(10, 6.5, 15.0, 100.0, 100.0, date, 2, "ST-04"),  # conflict
+        Report(10, 5.0, 40.0, 100.0, 100.0, date, 1, "ST-05"),  # outdated
+        Report(20, 6.0, 10.0, 200.0, 200.0, date, 1, "ST-06"),  # new
     ]
 
-    for r in reportes:
-        sistema.encolar_reporte(r)
+    for r in reports:
+        system.enqueue_report(r)
 
-    print(f"  Reportes en cola: {sistema.cantidad_reportes_pendientes()}")
+    print(f"  Reports in queue: {system.pending_report_count()}")
 
-    resultados = sistema.procesar_continuo()
-    for i, res in enumerate(resultados, start=1):
-        imprimir_resultado_reporte(i, res)
+    results = system.process_all()
+    for i, res in enumerate(results, start=1):
+        print_report_result(i, res)
 
-    subtitulo("Estado final del evento 10")
-    e = sistema.buscar_por_id(10)
-    mostrar_evento(e)
-    print(f"    Estaciones: {sorted(e.estaciones)}")
+    subtitle("Final state of event 10")
+    e = system.find_by_id(10)
+    show_event(e)
+    print(f"    Stations: {sorted(e.stations)}")
 
-    subtitulo("Métricas")
-    for k, v in sistema.metricas.items():
+    subtitle("Metrics")
+    for k, v in system.metrics.items():
         print(f"    {k}: {v}")
 
 
 # =========================================================
-# 9. REPORTES CON ARCHIVADO Y REACTIVACIÓN
+# 9. ARCHIVING AND REACTIVATION
 # =========================================================
 
-def demo_archivado_reactivacion():
-    titulo("9. ARCHIVADO Y REACTIVACIÓN (sección 6)")
+def demo_archive_reactivation():
+    title("9. ARCHIVING AND REACTIVATION (section 6)")
 
-    sistema = SistemaSismico()
-    fecha = fecha_utc(2026, 9, 7, 10, 0, 0)
+    system = SeismicSystem()
+    date = utc(2026, 9, 7, 10, 0, 0)
 
-    # Crear y archivar manualmente para la demo
-    sistema.crear_evento(70, 4.8, 40.0, 200.0, 200.0, fecha, "ST-01")
-    evento = sistema.buscar_por_id(70)
+    # Create and archive manually for the demo
+    system.create_event(70, 4.8, 40.0, 200.0, 200.0, date, "ST-01")
+    event = system.find_by_id(70)
 
-    sistema.avl.delete(evento.calcular_clave())
-    del sistema._eventos_activos[70]
-    evento.ubicacion = "archivado"
-    sistema._historicos[70] = evento
+    system.avl.delete(event.calculate_key())
+    del system._active_events[70]
+    event.location = "archived"
+    system._historical_events[70] = event
 
-    print(f"  Evento 70 archivado: {sistema.consultar_evento(70)['estado']}")
+    print(f"  Event 70 archived: {system.query_event(70)['state']}")
 
-    subtitulo("Reporte antiguo sobre archivado")
-    r1 = Reporte(70, 4.8, 40.0, 200.0, 200.0, fecha, 1, "ST-02")
-    res1 = sistema.procesar_reporte(r1)
-    print(f"  Decisión: {res1['decision']}")
-    print(f"  Mensaje:  {res1['mensaje']}")
+    subtitle("Old report over an archived event")
+    r1 = Report(70, 4.8, 40.0, 200.0, 200.0, date, 1, "ST-02")
+    res1 = system.process_report(r1)
+    print(f"  Decision: {res1['decision']}")
+    print(f"  Message:  {res1['message']}")
 
-    subtitulo("Reporte con revisión mayor sobre archivado")
-    r2 = Reporte(70, 6.1, 20.0, 200.0, 200.0, fecha, 2, "ST-03")
-    res2 = sistema.procesar_reporte(r2)
-    print(f"  Decisión: {res2['decision']}")
-    print(f"  Mensaje:  {res2['mensaje']}")
-    mostrar_evento(sistema.buscar_por_id(70))
-    print(f"  Consulta 70: {sistema.consultar_evento(70)['estado']}")
+    subtitle("Report with a higher revision over an archived event")
+    r2 = Report(70, 6.1, 20.0, 200.0, 200.0, date, 2, "ST-03")
+    res2 = system.process_report(r2)
+    print(f"  Decision: {res2['decision']}")
+    print(f"  Message:  {res2['message']}")
+    show_event(system.find_by_id(70))
+    print(f"  Query 70: {system.query_event(70)['state']}")
 
 
 # =========================================================
-# 10. VALIDACIONES
+# 10. VALIDATIONS
 # =========================================================
 
-def demo_validaciones():
-    titulo("10. VALIDACIONES (secciones 3 y 6)")
+def demo_validations():
+    title("10. VALIDATIONS (sections 3 and 6)")
 
-    sistema = SistemaSismico()
-    fecha = fecha_utc(2026, 9, 7, 10, 0, 0)
+    system = SeismicSystem()
+    date = utc(2026, 9, 7, 10, 0, 0)
 
-    casos = [
-        ("ID 0", dict(id_evento=0, magnitud=5.0, profundidad=10.0,
+    cases = [
+        ("ID 0", dict(event_id=0, magnitude=5.0, depth=10.0,
                       x=100.0, y=100.0)),
-        ("ID 1000000", dict(id_evento=1000000, magnitud=5.0, profundidad=10.0,
+        ("ID 1000000", dict(event_id=1000000, magnitude=5.0, depth=10.0,
                             x=100.0, y=100.0)),
-        ("M = -2.5", dict(id_evento=1, magnitud=-2.5, profundidad=10.0,
+        ("M = -2.5", dict(event_id=1, magnitude=-2.5, depth=10.0,
                           x=100.0, y=100.0)),
-        ("M = 10.5", dict(id_evento=1, magnitud=10.5, profundidad=10.0,
+        ("M = 10.5", dict(event_id=1, magnitude=10.5, depth=10.0,
                           x=100.0, y=100.0)),
-        ("H = -1", dict(id_evento=1, magnitud=5.0, profundidad=-1.0,
+        ("H = -1", dict(event_id=1, magnitude=5.0, depth=-1.0,
                         x=100.0, y=100.0)),
-        ("H = 701", dict(id_evento=1, magnitud=5.0, profundidad=701.0,
+        ("H = 701", dict(event_id=1, magnitude=5.0, depth=701.0,
                          x=100.0, y=100.0)),
-        ("x = 1001", dict(id_evento=1, magnitud=5.0, profundidad=10.0,
+        ("x = 1001", dict(event_id=1, magnitude=5.0, depth=10.0,
                           x=1001.0, y=100.0)),
-        ("y = -1", dict(id_evento=1, magnitud=5.0, profundidad=10.0,
+        ("y = -1", dict(event_id=1, magnitude=5.0, depth=10.0,
                         x=100.0, y=-1.0)),
-        ("M con dos decimales", dict(id_evento=1, magnitud=5.25,
-                                     profundidad=10.0, x=100.0, y=100.0)),
+        ("M with two decimals", dict(event_id=1, magnitude=5.25,
+                                     depth=10.0, x=100.0, y=100.0)),
     ]
 
-    for desc, kwargs in casos:
+    for desc, kwargs in cases:
         try:
-            sistema.crear_evento(
-                estacion="ST-01", fecha_hora=fecha, **kwargs
+            system.create_event(
+                station="ST-01", datetime_value=date, **kwargs
             )
-            print(f"  [FALLO] {desc}: debería haber rechazado")
+            print(f"  [FAIL] {desc}: it should have rejected")
         except ValueError as e:
             print(f"  [OK] {desc}: {e}")
 
-    subtitulo("Fechas sin zona horaria")
+    subtitle("Datetimes without timezone")
     from datetime import datetime as dt
     try:
-        sistema.crear_evento(
+        system.create_event(
             999, 5.0, 10.0, 100.0, 100.0,
-            dt(2026, 9, 7, 10, 0, 0),  # sin tzinfo
+            dt(2026, 9, 7, 10, 0, 0),  # without tzinfo
             "ST-01",
         )
-        print("  [FALLO] debería rechazar fecha sin tz")
+        print("  [FAIL] it should reject a datetime without tz")
     except ValueError as e:
         print(f"  [OK] {e}")
 
 
 # =========================================================
-# EJECUCIÓN PRINCIPAL
+# MAIN ENTRY POINT
 # =========================================================
 
 if __name__ == "__main__":
     import sys
 
     if "--ui" in sys.argv:
-        from ui.main_window import ejecutar_aplicacion
-        sys.exit(ejecutar_aplicacion())
+        from ui.main_window import run_application
+        sys.exit(run_application())
 
-    demo_mapa_y_zonas()
-    demo_prioridad_y_clave()
-    demo_rotaciones()
-    demo_eliminacion()
-    demo_modo_estres()
+    demo_map_and_zones()
+    demo_priority_and_key()
+    demo_rotations()
+    demo_deletion()
+    demo_stress_mode()
     demo_bst_vs_avl()
-    demo_sistema_crud()
-    demo_reportes()
-    demo_archivado_reactivacion()
-    demo_validaciones()
+    demo_system_crud()
+    demo_reports()
+    demo_archive_reactivation()
+    demo_validations()
 
-    titulo("FIN DE LAS PRUEBAS")
+    title("END OF TESTS")

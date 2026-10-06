@@ -30,7 +30,9 @@ class BST:
             else:
                 self._insert(node.right, event)
         else:
-            raise ValueError(f"Evento duplicado: clave {event.calcular_clave()}")
+            raise ValueError(
+                f"Duplicate event: key {event.calculate_key()}"
+            )
 
     # =========================
     # SEARCH
@@ -43,9 +45,9 @@ class BST:
         if node is None:
             return None
 
-        if key == node.event.calcular_clave():
+        if key == node.event.calculate_key():
             return node
-        if key < node.event.calcular_clave():
+        if key < node.event.calculate_key():
             return self._search(node.left, key)
         return self._search(node.right, key)
 
@@ -169,9 +171,9 @@ class BST:
     def _node_level(self, node, key, level):
         if node is None:
             return -1
-        if key == node.event.calcular_clave():
+        if key == node.event.calculate_key():
             return level
-        if key < node.event.calcular_clave():
+        if key < node.event.calculate_key():
             return self._node_level(node.left, key, level + 1)
         return self._node_level(node.right, key, level + 1)
 
@@ -251,12 +253,12 @@ class BST:
         if node is None:
             return None
 
-        if key < node.event.calcular_clave():
+        if key < node.event.calculate_key():
             node.left = self._delete(node.left, key)
             if node.left is not None:
                 node.left.parent = node
 
-        elif key > node.event.calcular_clave():
+        elif key > node.event.calculate_key():
             node.right = self._delete(node.right, key)
             if node.right is not None:
                 node.right.parent = node
@@ -274,7 +276,7 @@ class BST:
             successor = self.find_minimum(node.right)
             node.event = successor.event
             node.right = self._delete(
-                node.right, successor.event.calcular_clave()
+                node.right, successor.event.calculate_key()
             )
             if node.right is not None:
                 node.right.parent = node
@@ -285,16 +287,16 @@ class BST:
     # DEBUG DRAW
     # =========================
 
-    def dibujar(self):
+    def draw(self):
         if self.root is None:
-            print("El árbol está vacío")
+            print("The tree is empty")
         else:
-            print("\nÁrbol BST:")
+            print("\nBST tree:")
             print("-----------")
-            self._dibujar(self.root, "", "R")
+            self._draw(self.root, "", "R")
 
-    def _dibujar(self, node, espacio, posicion):
+    def _draw(self, node, space, position):
         if node is not None:
-            self._dibujar(node.right, espacio + "     ", "D")
-            print(espacio + posicion + "── " + str(node.event.id_evento))
-            self._dibujar(node.left, espacio + "     ", "I")
+            self._draw(node.right, space + "     ", "R")
+            print(space + position + "── " + str(node.event.event_id))
+            self._draw(node.left, space + "     ", "L")

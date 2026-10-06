@@ -12,99 +12,100 @@ class JsonSaver:
     SCHEMA_VERSION = 1
 
     @classmethod
-    def guardar(cls, sistema, ruta):
+    def save(cls, system, path):
         """Writes a complete structural snapshot to a user-selected path."""
-        destino = Path(ruta)
-        if not destino.name:
-            raise ValueError("Debes seleccionar un archivo JSON")
-        if destino.suffix.lower() != ".json":
-            destino = destino.with_suffix(".json")
+        destination = Path(path)
+        if not destination.name:
+            raise ValueError("You must select a JSON file")
+        if destination.suffix.lower() != ".json":
+            destination = destination.with_suffix(".json")
 
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        temporal = destino.with_name(destino.name + ".tmp")
-        datos = cls.a_diccionario(sistema)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temp = destination.with_name(destination.name + ".tmp")
+        data = cls.to_dict(system)
 
         try:
-            with temporal.open("w", encoding="utf-8") as archivo:
-                json.dump(datos, archivo, ensure_ascii=False, indent=2)
-                archivo.write("\n")
-            os.replace(temporal, destino)
+            with temp.open("w", encoding="utf-8") as file:
+                json.dump(data, file, ensure_ascii=False, indent=2)
+                file.write("\n")
+            os.replace(temp, destination)
         except OSError as error:
-            if temporal.exists():
-                temporal.unlink()
-            raise ValueError(f"No se pudo guardar el archivo: {error}") from error
+            if temp.exists():
+                temp.unlink()
+            raise ValueError(
+                f"Could not save the file: {error}"
+            ) from error
 
-        return destino
+        return destination
 
     @classmethod
-    def a_diccionario(cls, sistema):
+    def to_dict(cls, system):
         """Builds the JSON-compatible representation of a system."""
-        arbol = cls._serializar_arbol(sistema.avl.root)
+        tree = cls._serialize_tree(system.avl.root)
         return {
             "format": cls.FORMAT,
             "schema_version": cls.SCHEMA_VERSION,
-            # [FIX] Guardar el modo de carga de forma explícita
             "meta": {
-                "modo_carga": "topologia",
+                "load_mode": "topology",
             },
-            "scenario": sistema.escenario.to_dict(),
+            "scenario": system.scenario.to_dict(),
             "execution": {
-                "stress_mode": sistema.avl.modo_estres,
-                "rotations_total": sistema.avl.rotaciones_realizadas,
-                "last_rotations": list(sistema.ultimas_rotaciones),
-                "last_recovery_cost": sistema.ultimo_costo_recuperacion,
-                "metrics": dict(sistema.metricas),
+                "stress_mode": system.avl.stress_mode,
+                "rotations_total": system.avl.rotations_performed,
+                "last_rotations": list(system.last_rotations),
+                "last_recovery_cost": system.last_recovery_cost,
+                "metrics": dict(system.metrics),
             },
-            "active_tree": arbol,
+            "active_tree": tree,
             "historical_events": [
-                evento.to_dict()
-                for _, evento in sorted(sistema._historicos.items())
+                event.to_dict()
+                for _, event in sorted(system._historical_events.items())
             ],
-            "removed_ids": sorted(sistema.ids_eliminados),
+            "removed_ids": sorted(system.removed_ids),
             "report_queue": [
-                reporte.to_dict() for reporte in sistema.cola_reportes
+                report.to_dict() for report in system.report_queue
             ],
             "last_processed_report": (
-                sistema.ultimo_reporte_procesado.to_dict()
-                if sistema.ultimo_reporte_procesado is not None
+                system.last_processed_report.to_dict()
+                if system.last_processed_report is not None
                 else None
             ),
-            "insertion_events": cls._eventos_preorden(sistema.avl.root),
+            "insertion_events": cls._preorder_events(system.avl.root),
         }
 
     @classmethod
-    def _serializar_arbol(cls, raiz):
-        nodos = []
+    def _serialize_tree(cls, root):
+        nodes = []
 
-        def visitar(nodo):
-            if nodo is None:
+        def visit(node):
+            if node is None:
                 return
-            nodos.append({
-                "event": nodo.event.to_dict(),
-                "left": nodo.left.event.id_evento if nodo.left else None,
-                "right": nodo.right.event.id_evento if nodo.right else None,
-                "height": nodo.height,
-                "balance_factor": nodo.balance_factor,
+            nodes.append({
+                "event": node.event.to_dict(),
+                "left": node.left.event.event_id if node.left else None,
+                "right": node.right.event.event_id if node.right else None,
+                "height": node.height,
+                "balance_factor": node.balance_factor,
             })
-            visitar(nodo.left)
-            visitar(nodo.right)
+            visit(node.left)
+            visit(node.right)
 
-        visitar(raiz)
+        visit(root)
         return {
-            "root": raiz.event.id_evento if raiz else None,
-            "nodes": nodos,
+            "root": root.event.event_id if root else None,
+            "nodes": nodes,
         }
 
     @classmethod
-    def _eventos_preorden(cls, raiz):
-        eventos = []
+    def _preorder_events(cls, root):
+        events = []
 
-        def visitar(nodo):
-            if nodo is None:
+        def visit(node):
+            if node is None:
                 return
-            eventos.append(nodo.event.to_dict())
-            visitar(nodo.left)
-            visitar(nodo.right)
+            events.append(node.event.to_dict())
+            visit(node.left)
+            visit(node.right)
 
-        visitar(raiz)
-        return eventos
+        visit(root)
+        return events
