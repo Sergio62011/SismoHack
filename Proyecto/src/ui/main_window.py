@@ -333,7 +333,7 @@ class VentanaPrincipal(QMainWindow):
         grupo_arbol = QGroupBox("Vista grafica del AVL")
         arbol_layout = QVBoxLayout(grupo_arbol)
         ayuda = QLabel(
-            "Cada nodo muestra: ID, prioridad, magnitud, altura y factor de balance. "
+            "Cada nodo muestra: ID y prioridad. "
             "Arrastra con el mouse para desplazarte. Ctrl + rueda para zoom."
         )
         ayuda.setWordWrap(True)
