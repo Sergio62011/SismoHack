@@ -1,5 +1,7 @@
 from pathlib import Path
 import sys
+import re
+import unicodedata
 from datetime import datetime, timezone
 from PySide6.QtCore import QDateTime, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
@@ -58,12 +60,12 @@ from structure.bst import BST
 from services.auditoria import verificar_estructura
 
 class DialogoCorregirEvento(QDialog):
-    """Diálogo modal para corregir los datos de un evento activo."""
+    """Modal dialog to edit an active event."""
 
     def __init__(self, evento, parent=None):
         super().__init__(parent)
         self.evento = evento
-        self.setWindowTitle(f"Corregir evento SIS-{evento.id_evento:06d}")
+        self.setWindowTitle(f"Edit event SIS-{evento.id_evento:06d}")
         self.setMinimumWidth(420)
         self._crear_ui()
 
@@ -74,9 +76,9 @@ class DialogoCorregirEvento(QDialog):
         # === Encabezado con info no editable ===
         info = QLabel(
             f"<b>ID:</b> {self.evento.id_evento}<br>"
-            f"<b>Revisión actual:</b> {self.evento.revision}<br>"
-            f"<b>Estado:</b> {self.evento.estado}<br>"
-            f"<b>Prioridad actual:</b> P{self.evento.prioridad}"
+            f"<b>Current revision:</b> {self.evento.revision}<br>"
+            f"<b>Status:</b> {self._estado_en_ingles(self.evento.estado)}<br>"
+            f"<b>Current priority:</b> P{self.evento.prioridad}"
         )
         info.setStyleSheet(
             "background: #e8eef4; padding: 10px; border-radius: 5px;"
@@ -122,17 +124,17 @@ class DialogoCorregirEvento(QDialog):
             )
         )
 
-        form.addRow("Magnitud", self.campo_magnitud)
-        form.addRow("Profundidad (km)", self.campo_profundidad)
-        form.addRow("Coordenada X", self.campo_x)
-        form.addRow("Coordenada Y", self.campo_y)
-        form.addRow("Fecha UTC", self.campo_fecha)
+        form.addRow("Magnitude", self.campo_magnitud)
+        form.addRow("Depth (km)", self.campo_profundidad)
+        form.addRow("X coordinate", self.campo_x)
+        form.addRow("Y coordinate", self.campo_y)
+        form.addRow("Date (UTC)", self.campo_fecha)
         layout.addLayout(form)
 
         # === Nota ===
         nota = QLabel(
-            "Al corregir, la revisión aumentará en 1 y el evento "
-            "volverá al estado 'pendiente'."
+            "Editing this event will increase its revision by 1 and set its "
+            "status back to 'pending'."
         )
         nota.setWordWrap(True)
         nota.setStyleSheet("color: #52616f; font-size: 11px;")
@@ -143,8 +145,8 @@ class DialogoCorregirEvento(QDialog):
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
         )
-        botones.button(QDialogButtonBox.StandardButton.Ok).setText("Corregir")
-        botones.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancelar")
+        botones.button(QDialogButtonBox.StandardButton.Ok).setText("Save changes")
+        botones.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancel")
         botones.accepted.connect(self.accept)
         botones.rejected.connect(self.reject)
         layout.addWidget(botones)
@@ -162,6 +164,14 @@ class DialogoCorregirEvento(QDialog):
             "y": self.campo_y.value(),
             "fecha_hora": fecha,
         }
+
+    @staticmethod
+    def _estado_en_ingles(estado):
+        return {
+            "pendiente": "pending",
+            "revisado": "reviewed",
+            "archivado": "archived",
+        }.get(estado, estado)
 
 class VistaArbolConZoom(QGraphicsView):
 
@@ -228,8 +238,8 @@ class VentanaPrincipal(QMainWindow):
     def _procesar_un_paso(self):
         if not self.sistema.hay_reportes_pendientes():
             self.timer_procesamiento.stop()
-            self.boton_procesar_todos.setText("Procesar toda la cola")
-            self.statusBar().showMessage("Cola vacía", 3000)
+            self.boton_procesar_todos.setText("Process entire queue")
+            self.statusBar().showMessage("Queue is empty", 3000)
             return
         resultado = self.sistema.procesar_siguiente_reporte()
         self._mostrar_resultados([resultado])
@@ -245,7 +255,7 @@ class VentanaPrincipal(QMainWindow):
         try:
             self.sistema.saltar_reloj(fecha)
             self.statusBar().showMessage(
-                f"Reloj saltó a {fecha.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Clock moved to {fecha.strftime('%Y-%m-%d %H:%M:%S')}",
                 4000,
             )
             self.actualizar_vistas()
@@ -264,25 +274,25 @@ class VentanaPrincipal(QMainWindow):
         layout.addWidget(self._crear_encabezado())
 
         pestanas = QTabWidget()
-        pestanas.addTab(self._crear_resumen(), "Resumen")
-        pestanas.addTab(self._crear_eventos(), "Eventos")
-        pestanas.addTab(self._crear_reportes(), "Reportes")
-        pestanas.addTab(self._crear_mapa(), "Mapa y zonas")
+        pestanas.addTab(self._crear_resumen(), "Overview")
+        pestanas.addTab(self._crear_eventos(), "Events")
+        pestanas.addTab(self._crear_reportes(), "Reports")
+        pestanas.addTab(self._crear_mapa(), "Map and zones")
         pestanas.addTab(self._crear_comparacion(), "AVL vs BST")
-        pestanas.addTab(self._crear_historico(), "Histórico")
-        pestanas.addTab(self._crear_consultas(), "Consultas")
-        pestanas.addTab(self._crear_versiones(), "Versiones")
-        pestanas.addTab(self._crear_auditoria(), "Auditoría")
+        pestanas.addTab(self._crear_historico(), "History")
+        pestanas.addTab(self._crear_consultas(), "Queries")
+        pestanas.addTab(self._crear_versiones(), "Versions")
+        pestanas.addTab(self._crear_auditoria(), "Audit")
         layout.addWidget(pestanas, 1)
 
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("Sistema listo")
+        self.statusBar().showMessage("System ready")
         self.statusBar().setStyleSheet(
             "QStatusBar { background: #e8eef4; color: #172b4d; }"
         )
 
-        self.etiqueta_modo = QLabel("Modo: normal")
+        self.etiqueta_modo = QLabel("Mode: normal")
         self.etiqueta_modo.setStyleSheet(
             "color: #52616f; padding-right: 10px;"
         )
@@ -318,26 +328,26 @@ class VentanaPrincipal(QMainWindow):
         titulo.setStyleSheet(
             "font-size: 24px; font-weight: 700; color: #17324d;"
         )
-        subtitulo = QLabel("Observatorio sismico")
+        subtitulo = QLabel("Earthquake monitoring system")
         subtitulo.setStyleSheet("color: #52616f;")
         textos.addWidget(titulo)
         textos.addWidget(subtitulo)
         layout.addLayout(textos)
         layout.addStretch()
 
-        self.boton_guardar = QPushButton("Guardar JSON")
+        self.boton_guardar = QPushButton("Save JSON")
         self.boton_guardar.clicked.connect(self.guardar_json)
         layout.addWidget(self.boton_guardar)
 
-        self.boton_cargar_topologia = QPushButton("Cargar topología")
+        self.boton_cargar_topologia = QPushButton("Load topology")
         self.boton_cargar_topologia.clicked.connect(self.cargar_json_topologia)
         layout.addWidget(self.boton_cargar_topologia)
 
-        self.boton_cargar_inserciones = QPushButton("Cargar inserciones")
+        self.boton_cargar_inserciones = QPushButton("Load insertion sequence")
         self.boton_cargar_inserciones.clicked.connect(self.cargar_json_inserciones)
         layout.addWidget(self.boton_cargar_inserciones)
 
-        self.boton_estres = QPushButton("Modo estres")
+        self.boton_estres = QPushButton("Stress mode")
         self.boton_estres.setCheckable(True)
         self.boton_estres.toggled.connect(self._switch_modo_estres)
         self.boton_estres.setStyleSheet(
@@ -352,7 +362,7 @@ class VentanaPrincipal(QMainWindow):
         )
         layout.addWidget(self.boton_estres)
 
-        self.boton_deshacer = QPushButton("Deshacer")
+        self.boton_deshacer = QPushButton("Undo")
         self.boton_deshacer.clicked.connect(self.deshacer)
         self.boton_deshacer.setEnabled(False)
         layout.addWidget(self.boton_deshacer)
@@ -391,7 +401,7 @@ class VentanaPrincipal(QMainWindow):
         )
         layout.addWidget(self.campo_salto)
 
-        self.boton_saltar = QPushButton("Saltar a esta hora")
+        self.boton_saltar = QPushButton("Set clock to this time")
         self.boton_saltar.clicked.connect(self.saltar_reloj)
         layout.addWidget(self.boton_saltar)
 
@@ -406,18 +416,18 @@ class VentanaPrincipal(QMainWindow):
     def _crear_resumen(self):
         pagina = QWidget()
         layout = QVBoxLayout(pagina)
-        metricas = QGroupBox("Estado del escenario")
+        metricas = QGroupBox("Scenario status")
         rejilla = QGridLayout(metricas)
         self.etiquetas_resumen = {}
         datos = [
-            ("Eventos activos", "eventos"),
-            ("Altura AVL", "altura"),
-            ("Hojas AVL", "hojas"),
-            ("Reportes en cola", "cola"),
-            ("Correcciones aceptadas", "correcciones"),
-            ("Conflictos", "conflictos"),
-            ("Confirmaciones", "confirmaciones"),
-            ("Creados por reporte", "creados"),
+            ("Active events", "eventos"),
+            ("AVL height", "altura"),
+            ("AVL leaves", "hojas"),
+            ("Reports in queue", "cola"),
+            ("Accepted corrections", "correcciones"),
+            ("Conflicts", "conflictos"),
+            ("Confirmations", "confirmaciones"),
+            ("Created from reports", "creados"),
         ]
         for indice, (texto, clave) in enumerate(datos):
             tarjeta = QFrame()
@@ -438,11 +448,11 @@ class VentanaPrincipal(QMainWindow):
             rejilla.addWidget(tarjeta, indice // 4, indice % 4)
         layout.addWidget(metricas)
 
-        grupo_arbol = QGroupBox("Vista grafica del AVL")
+        grupo_arbol = QGroupBox("AVL tree view")
         arbol_layout = QVBoxLayout(grupo_arbol)
         ayuda = QLabel(
-            "Cada nodo muestra: ID y prioridad. "
-            "Arrastra con el mouse para desplazarte. Ctrl + rueda para zoom."
+            "Each node shows its ID and priority. Drag to move around. "
+            "Hold Ctrl and use the mouse wheel to zoom."
         )
         ayuda.setWordWrap(True)
         ayuda.setStyleSheet("color: #52616f;")
@@ -451,7 +461,7 @@ class VentanaPrincipal(QMainWindow):
         barra_arbol = QHBoxLayout()
         boton_zoom_in = QPushButton("Zoom +")
         boton_zoom_out = QPushButton("Zoom -")
-        boton_reset = QPushButton("Reset vista")
+        boton_reset = QPushButton("Reset view")
         boton_zoom_in.clicked.connect(
             lambda: self.vista_arbol.scale(1.2, 1.2)
         )
@@ -462,10 +472,10 @@ class VentanaPrincipal(QMainWindow):
         barra_arbol.addWidget(boton_zoom_in)
         barra_arbol.addWidget(boton_zoom_out)
         barra_arbol.addWidget(boton_reset)
-        boton_costo = QPushButton("Ver acceso costoso")
+        boton_costo = QPushButton("Show costly searches")
         boton_costo.clicked.connect(self._mostrar_acceso_costoso)
         barra_arbol.addWidget(boton_costo)
-        boton_verificar = QPushButton("Verificar estructura")
+        boton_verificar = QPushButton("Check structure")
         boton_verificar.clicked.connect(self.verificar_estructura)
         barra_arbol.addWidget(boton_verificar)
         barra_arbol.addStretch()
@@ -476,7 +486,7 @@ class VentanaPrincipal(QMainWindow):
         arbol_layout.addWidget(self.vista_arbol)
         layout.addWidget(grupo_arbol, 1)
 
-        grupo_orden = QGroupBox("Orden inorder")
+        grupo_orden = QGroupBox("In-order traversal")
         orden_layout = QVBoxLayout(grupo_orden)
         self.texto_inorden = QTextEdit()
         self.texto_inorden.setReadOnly(True)
@@ -488,21 +498,21 @@ class VentanaPrincipal(QMainWindow):
     def _crear_eventos(self):
         pagina = QWidget()
         division = QSplitter(Qt.Orientation.Horizontal)
-        formulario = QGroupBox("Crear evento")
+        formulario = QGroupBox("Create event")
         formulario_layout = QVBoxLayout(formulario)
         self.campos_evento = self._crear_formulario(formulario_layout)
-        boton_crear = QPushButton("Crear evento")
+        boton_crear = QPushButton("Create event")
         boton_crear.clicked.connect(self.crear_evento)
         formulario_layout.addWidget(boton_crear)
         formulario_layout.addStretch()
 
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
-        grupo_tabla = QGroupBox("Eventos activos")
+        grupo_tabla = QGroupBox("Active events")
         tabla_layout = QVBoxLayout(grupo_tabla)
         self.tabla_eventos = self._crear_tabla(
-            ["ID", "Magnitud", "Prof.", "Prioridad", "Revision",
-             "Estado", "Zona", "Costo"]
+            ["ID", "Magnitude", "Depth", "Priority", "Revision",
+             "Status", "Zone", "Costly"]
         )
         self.tabla_eventos.itemSelectionChanged.connect(
             self._actualizar_botones_evento
@@ -515,17 +525,17 @@ class VentanaPrincipal(QMainWindow):
 
         acciones = QHBoxLayout()
 
-        self.boton_corregir = QPushButton("Corregir evento")
+        self.boton_corregir = QPushButton("Edit event")
         self.boton_corregir.clicked.connect(self.corregir_evento)
         self.boton_corregir.setEnabled(False)
         acciones.addWidget(self.boton_corregir)
 
-        self.boton_revisar = QPushButton("Marcar como revisado")
+        self.boton_revisar = QPushButton("Mark as reviewed")
         self.boton_revisar.clicked.connect(self.marcar_revisado)
         self.boton_revisar.setEnabled(False)
         acciones.addWidget(self.boton_revisar)
 
-        self.boton_eliminar = QPushButton("Eliminar evento")
+        self.boton_eliminar = QPushButton("Delete event")
         self.boton_eliminar.setStyleSheet("background: #ae3e3e;")
         self.boton_eliminar.clicked.connect(self.eliminar_evento)
         self.boton_eliminar.setEnabled(False)
@@ -543,26 +553,26 @@ class VentanaPrincipal(QMainWindow):
     def _crear_reportes(self):
         pagina = QWidget()
         division = QSplitter(Qt.Orientation.Horizontal)
-        formulario = QGroupBox("Nuevo reporte de estacion")
+        formulario = QGroupBox("New station report")
         formulario_layout = QVBoxLayout(formulario)
         self.campos_reporte = self._crear_formulario(formulario_layout, True)
-        boton_encolar = QPushButton("Agregar a la cola")
+        boton_encolar = QPushButton("Add to queue")
         boton_encolar.clicked.connect(self.encolar_reporte)
         formulario_layout.addWidget(boton_encolar)
         formulario_layout.addStretch()
 
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
-        grupo_cola = QGroupBox("Cola FIFO de reportes")
+        grupo_cola = QGroupBox("Report queue (FIFO)")
         cola_layout = QVBoxLayout(grupo_cola)
         self.tabla_reportes = self._crear_tabla(
-            ["ID", "Magnitud", "Revision", "Estacion", "Fecha UTC"]
+            ["ID", "Magnitude", "Revision", "Station", "Date (UTC)"]
         )
         cola_layout.addWidget(self.tabla_reportes)
         acciones = QHBoxLayout()
-        boton_uno = QPushButton("Procesar siguiente")
+        boton_uno = QPushButton("Process next")
         boton_uno.clicked.connect(self.procesar_siguiente_reporte)
-        self.boton_procesar_todos = QPushButton("Procesar toda la cola")
+        self.boton_procesar_todos = QPushButton("Process entire queue")
         self.boton_procesar_todos.clicked.connect(self.procesar_todos_los_reportes)
         acciones.addWidget(boton_uno)
         acciones.addWidget(self.boton_procesar_todos)
@@ -570,7 +580,7 @@ class VentanaPrincipal(QMainWindow):
         cola_layout.addLayout(acciones)
         panel_layout.addWidget(grupo_cola, 1)
 
-        grupo_resultado = QGroupBox("Resultado del procesamiento")
+        grupo_resultado = QGroupBox("Processing result")
         resultado_layout = QVBoxLayout(grupo_resultado)
         self.texto_resultado = QTextEdit()
         self.texto_resultado.setReadOnly(True)
@@ -587,33 +597,33 @@ class VentanaPrincipal(QMainWindow):
     def _crear_mapa(self):
         pagina = QWidget()
         division = QSplitter(Qt.Orientation.Horizontal)
-        formulario = QGroupBox("Agregar zona")
+        formulario = QGroupBox("Add zone")
         formulario_layout = QVBoxLayout(formulario)
         datos = QFormLayout()
         self.nombre_zona = QLineEdit()
-        self.nombre_zona.setPlaceholderText("Ej. Ciudad Norte")
+        self.nombre_zona.setPlaceholderText("e.g. North City")
         self.x_min_zona = self._campo_decimal(0, 1000)
         self.y_min_zona = self._campo_decimal(0, 1000)
         self.x_max_zona = self._campo_decimal(0, 1000)
         self.y_max_zona = self._campo_decimal(0, 1000)
-        self.zona_poblada = QCheckBox("Zona poblada")
-        datos.addRow("Nombre", self.nombre_zona)
-        datos.addRow("X minima", self.x_min_zona)
-        datos.addRow("Y minima", self.y_min_zona)
-        datos.addRow("X maxima", self.x_max_zona)
-        datos.addRow("Y maxima", self.y_max_zona)
-        datos.addRow("Tipo", self.zona_poblada)
+        self.zona_poblada = QCheckBox("Populated area")
+        datos.addRow("Name", self.nombre_zona)
+        datos.addRow("Minimum X", self.x_min_zona)
+        datos.addRow("Minimum Y", self.y_min_zona)
+        datos.addRow("Maximum X", self.x_max_zona)
+        datos.addRow("Maximum Y", self.y_max_zona)
+        datos.addRow("Type", self.zona_poblada)
         formulario_layout.addLayout(datos)
-        boton_agregar = QPushButton("Agregar zona")
+        boton_agregar = QPushButton("Add zone")
         boton_agregar.clicked.connect(self.agregar_zona)
         formulario_layout.addWidget(boton_agregar)
-        leyenda = QLabel("P: poblada   N: no poblada   E: evento")
+        leyenda = QLabel("P: populated   N: not populated   E: event")
         leyenda.setWordWrap(True)
         leyenda.setStyleSheet("color: #52616f;")
         formulario_layout.addWidget(leyenda)
         formulario_layout.addStretch()
 
-        grupo_mapa = QGroupBox("Mapa sismico")
+        grupo_mapa = QGroupBox("Seismic map")
         mapa_layout = QVBoxLayout(grupo_mapa)
         self.tabla_mapa = QTableWidget()
         self.tabla_mapa.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -633,11 +643,10 @@ class VentanaPrincipal(QMainWindow):
         layout = QVBoxLayout(pagina)
 
         explicacion = QLabel(
-            "Comparación AVL vs BST. El AVL se muestra tal como está en "
-            "memoria. El BST se construye con la misma secuencia de "
-            "inserciones cuando se carga un JSON por inserciones; en caso "
-            "contrario, se reconstruye insertando los eventos activos en "
-            "orden ascendente de K."
+            "AVL vs BST comparison. The AVL tree is shown as it is stored "
+            "in memory. When a JSON file is loaded by insertion sequence, "
+            "the BST uses the same sequence. Otherwise, it is rebuilt by "
+            "inserting active events in ascending K order."
         )
 
         explicacion.setStyleSheet("color: #52616f;")
@@ -645,24 +654,24 @@ class VentanaPrincipal(QMainWindow):
         layout.addWidget(explicacion)
 
         barra_botones = QHBoxLayout()
-        boton_cargar = QPushButton("Cargar JSON por inserciones")
+        boton_cargar = QPushButton("Load JSON by insertion sequence")
         boton_cargar.clicked.connect(self.cargar_json_inserciones)
         barra_botones.addWidget(boton_cargar)
         barra_botones.addStretch()
         layout.addLayout(barra_botones)
 
-        metricas = QGroupBox("Métricas estructurales")
+        metricas = QGroupBox("Structural metrics")
         rejilla = QGridLayout(metricas)
         self.etiquetas_comparacion = {}
         datos = [
-            ("AVL altura", "avl_altura"),
-            ("AVL hojas", "avl_hojas"),
-            ("AVL raíz", "avl_raiz"),
-            ("AVL nodos", "avl_nodos"),
-            ("BST altura", "bst_altura"),
-            ("BST hojas", "bst_hojas"),
-            ("BST raíz", "bst_raiz"),
-            ("BST nodos", "bst_nodos"),
+            ("AVL height", "avl_altura"),
+            ("AVL leaves", "avl_hojas"),
+            ("AVL root", "avl_raiz"),
+            ("AVL nodes", "avl_nodos"),
+            ("BST height", "bst_altura"),
+            ("BST leaves", "bst_hojas"),
+            ("BST root", "bst_raiz"),
+            ("BST nodes", "bst_nodos"),
         ]
         for indice, (texto, clave) in enumerate(datos):
             tarjeta = QFrame()
@@ -684,7 +693,7 @@ class VentanaPrincipal(QMainWindow):
         layout.addWidget(metricas)
 
         arboles = QSplitter(Qt.Orientation.Horizontal)
-        grupo_avl = QGroupBox("AVL temporal")
+        grupo_avl = QGroupBox("Current AVL")
         avl_layout = QVBoxLayout(grupo_avl)
         self.escena_avl_comparacion = QGraphicsScene(self)
         self.vista_avl_comparacion = VistaArbolConZoom(
@@ -692,7 +701,7 @@ class VentanaPrincipal(QMainWindow):
         )
         avl_layout.addWidget(self.vista_avl_comparacion)
 
-        grupo_bst = QGroupBox("BST sin balanceo")
+        grupo_bst = QGroupBox("Unbalanced BST")
         bst_layout = QVBoxLayout(grupo_bst)
         self.escena_bst_comparacion = QGraphicsScene(self)
         self.vista_bst_comparacion = VistaArbolConZoom(
@@ -711,17 +720,17 @@ class VentanaPrincipal(QMainWindow):
         division = QSplitter(Qt.Orientation.Horizontal)
         self._archivo_previsualizado = None
 
-        archivo = QGroupBox("Archivo de rama")
+        archivo = QGroupBox("Branch archiving")
         archivo_layout = QVBoxLayout(archivo)
         ayuda = QLabel(
-            "El sistema archiva la mayor rama elegible: eventos de prioridad "
-            "baja con antigüedad superior al límite T."
+            "The system archives the largest eligible branch: low-priority "
+            "events older than the T limit."
         )
         ayuda.setWordWrap(True)
         ayuda.setStyleSheet("color: #52616f;")
         archivo_layout.addWidget(ayuda)
         self.etiqueta_previsualizacion_archivo = QLabel(
-            "Aún no se ha evaluado una rama."
+            "No branch has been checked yet."
         )
         self.etiqueta_previsualizacion_archivo.setWordWrap(True)
         self.etiqueta_previsualizacion_archivo.setStyleSheet(
@@ -729,9 +738,9 @@ class VentanaPrincipal(QMainWindow):
             "padding: 8px;"
         )
         archivo_layout.addWidget(self.etiqueta_previsualizacion_archivo)
-        boton_previsualizar = QPushButton("Previsualizar archivo")
+        boton_previsualizar = QPushButton("Preview archive")
         boton_previsualizar.clicked.connect(self.previsualizar_archivo_historico)
-        self.boton_archivar_rama = QPushButton("Archivar rama")
+        self.boton_archivar_rama = QPushButton("Archive branch")
         self.boton_archivar_rama.clicked.connect(self.archivar_rama_historico)
         self.boton_archivar_rama.setEnabled(False)
         archivo_layout.addWidget(boton_previsualizar)
@@ -740,10 +749,10 @@ class VentanaPrincipal(QMainWindow):
 
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
-        grupo_tabla = QGroupBox("Eventos archivados")
+        grupo_tabla = QGroupBox("Archived events")
         tabla_layout = QVBoxLayout(grupo_tabla)
         self.tabla_historico = self._crear_tabla(
-            ["ID", "Magnitud", "Prioridad", "Revision", "Estado", "Fecha UTC"]
+            ["ID", "Magnitude", "Priority", "Revision", "Status", "Date (UTC)"]
         )
         self.tabla_historico.itemSelectionChanged.connect(
             self._actualizar_detalle_historico
@@ -751,7 +760,7 @@ class VentanaPrincipal(QMainWindow):
         tabla_layout.addWidget(self.tabla_historico)
         panel_layout.addWidget(grupo_tabla, 1)
 
-        grupo_detalle = QGroupBox("Detalle del evento archivado")
+        grupo_detalle = QGroupBox("Archived event details")
         detalle_layout = QVBoxLayout(grupo_detalle)
         self.texto_detalle_historico = QTextEdit()
         self.texto_detalle_historico.setReadOnly(True)
@@ -770,7 +779,7 @@ class VentanaPrincipal(QMainWindow):
         pagina = QWidget()
         layout = QVBoxLayout(pagina)
 
-        parametros = QGroupBox("Parámetros del escenario")
+        parametros = QGroupBox("Scenario parameters")
         parametros_layout = QHBoxLayout(parametros)
 
         self.campo_w = QDoubleSpinBox()
@@ -801,7 +810,7 @@ class VentanaPrincipal(QMainWindow):
         parametros_layout.addWidget(QLabel("T (h)"))
         parametros_layout.addWidget(self.campo_t)
 
-        boton_parametros = QPushButton("Aplicar parámetros")
+        boton_parametros = QPushButton("Apply parameters")
         boton_parametros.clicked.connect(self.aplicar_parametros)
         parametros_layout.addWidget(boton_parametros)
         layout.addWidget(parametros)
@@ -811,13 +820,13 @@ class VentanaPrincipal(QMainWindow):
         izquierda = QWidget()
         izquierda_layout = QVBoxLayout(izquierda)
 
-        grupo_k = QGroupBox("Primeros k pendientes — K descendente")
+        grupo_k = QGroupBox("Top k pending events — descending K")
         grupo_k_layout = QVBoxLayout(grupo_k)
         fila_k = QHBoxLayout()
         self.campo_k_consulta = QSpinBox()
         self.campo_k_consulta.setRange(1, 999999)
         self.campo_k_consulta.setValue(5)
-        boton_k = QPushButton("Consultar")
+        boton_k = QPushButton("Search")
         boton_k.clicked.connect(self.consultar_primeros_k)
         fila_k.addWidget(QLabel("k:"))
         fila_k.addWidget(self.campo_k_consulta)
@@ -828,14 +837,14 @@ class VentanaPrincipal(QMainWindow):
         grupo_k_layout.addWidget(self.texto_consulta_k)
         izquierda_layout.addWidget(grupo_k, 1)
 
-        grupo_m = QGroupBox("Eventos por intervalo de magnitud")
+        grupo_m = QGroupBox("Events by magnitude range")
         grupo_m_layout = QVBoxLayout(grupo_m)
         fila_m = QHBoxLayout()
         self.campo_m_min = self._campo_decimal(-2, 10)
         self.campo_m_max = self._campo_decimal(-2, 10)
         self.campo_m_min.setValue(-2.0)
         self.campo_m_max.setValue(10.0)
-        boton_m = QPushButton("Consultar")
+        boton_m = QPushButton("Search")
         boton_m.clicked.connect(self.consultar_magnitud)
         fila_m.addWidget(QLabel("Min:"))
         fila_m.addWidget(self.campo_m_min)
@@ -853,7 +862,7 @@ class VentanaPrincipal(QMainWindow):
         derecha = QWidget()
         derecha_layout = QVBoxLayout(derecha)
 
-        grupo_pf = QGroupBox("Profundidad y rango de fechas")
+        grupo_pf = QGroupBox("Depth and date range")
         grupo_pf_layout = QVBoxLayout(grupo_pf)
         form_pf = QFormLayout()
         self.campo_profundidad_consulta = self._campo_decimal(0, 700)
@@ -864,11 +873,11 @@ class VentanaPrincipal(QMainWindow):
             campo.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
             campo.setCalendarPopup(True)
             campo.setDateTime(self._qdatetime_del_reloj())
-        form_pf.addRow("Profundidad máx. (km)", self.campo_profundidad_consulta)
-        form_pf.addRow("Desde UTC", self.campo_fecha_inicio_consulta)
-        form_pf.addRow("Hasta UTC", self.campo_fecha_fin_consulta)
+        form_pf.addRow("Maximum depth (km)", self.campo_profundidad_consulta)
+        form_pf.addRow("From (UTC)", self.campo_fecha_inicio_consulta)
+        form_pf.addRow("To (UTC)", self.campo_fecha_fin_consulta)
         grupo_pf_layout.addLayout(form_pf)
-        boton_pf = QPushButton("Consultar")
+        boton_pf = QPushButton("Search")
         boton_pf.clicked.connect(self.consultar_profundidad_fecha)
         grupo_pf_layout.addWidget(boton_pf)
         self.texto_consulta_pf = QTextEdit()
@@ -876,12 +885,12 @@ class VentanaPrincipal(QMainWindow):
         grupo_pf_layout.addWidget(self.texto_consulta_pf)
         derecha_layout.addWidget(grupo_pf, 1)
 
-        grupo_a = QGroupBox("Asociaciones")
+        grupo_a = QGroupBox("Associations")
         grupo_a_layout = QVBoxLayout(grupo_a)
         fila_a = QHBoxLayout()
         self.campo_id_asociaciones = QSpinBox()
         self.campo_id_asociaciones.setRange(1, 999999)
-        boton_a = QPushButton("Consultar asociaciones")
+        boton_a = QPushButton("View associations")
         boton_a.clicked.connect(self.consultar_asociaciones)
         fila_a.addWidget(QLabel("ID:"))
         fila_a.addWidget(self.campo_id_asociaciones)
@@ -905,7 +914,7 @@ class VentanaPrincipal(QMainWindow):
                 l=self.campo_l.value(),
                 t=self.campo_t.value(),
             )
-            mensaje = "Parámetros actualizados" if cambio else "Sin cambios en los parámetros"
+            mensaje = "Parameters updated" if cambio else "No parameter changes"
             self.statusBar().showMessage(mensaje, 4000)
             self.actualizar_vistas()
         except ValueError as error:
@@ -914,11 +923,11 @@ class VentanaPrincipal(QMainWindow):
     @staticmethod
     def _texto_eventos_consulta(eventos):
         if not eventos:
-            return "Sin resultados."
+            return "No results."
         return "\n".join(
             f"SIS-{evento.id_evento:06d} | K={evento.calcular_clave()} | "
-            f"M={evento.magnitud:.1f} | H={evento.profundidad:.1f} | "
-            f"{evento.estado}"
+            f"M={evento.magnitud:.1f} | Depth={evento.profundidad:.1f} | "
+            f"{DialogoCorregirEvento._estado_en_ingles(evento.estado)}"
             for evento in eventos
         )
 
@@ -928,7 +937,7 @@ class VentanaPrincipal(QMainWindow):
                 self.sistema, self.campo_k_consulta.value()
             )
             self.texto_consulta_k.setPlainText(
-                f"Nodos AVL examinados: {resultado['nodos_examinados']}\n\n"
+                f"AVL nodes checked: {resultado['nodos_examinados']}\n\n"
                 + self._texto_eventos_consulta(resultado["eventos"])
             )
         except ValueError as error:
@@ -942,7 +951,7 @@ class VentanaPrincipal(QMainWindow):
                 self.campo_m_max.value(),
             )
             self.texto_consulta_m.setPlainText(
-                f"Nodos AVL examinados: {resultado['nodos_examinados']}\n\n"
+                f"AVL nodes checked: {resultado['nodos_examinados']}\n\n"
                 + self._texto_eventos_consulta(resultado["eventos"])
             )
         except ValueError as error:
@@ -959,7 +968,7 @@ class VentanaPrincipal(QMainWindow):
                 fecha_fin,
             )
             self.texto_consulta_pf.setPlainText(
-                f"Nodos AVL examinados: {resultado['nodos_examinados']}\n\n"
+                f"AVL nodes checked: {resultado['nodos_examinados']}\n\n"
                 + self._texto_eventos_consulta(resultado["eventos"])
             )
         except ValueError as error:
@@ -973,43 +982,45 @@ class VentanaPrincipal(QMainWindow):
             evento = resultado["evento"]
             referencia = resultado["referencia"]
             lineas = [
-                f"Evento: SIS-{evento.id_evento:06d} ({resultado['estado']})",
-                f"Nodos AVL examinados: {resultado['nodos_examinados']}",
+                f"Event: SIS-{evento.id_evento:06d} ({DialogoCorregirEvento._estado_en_ingles(resultado['estado'])})",
+                f"AVL nodes checked: {resultado['nodos_examinados']}",
                 "",
-                "Candidatos:",
+                "Candidates:",
             ]
             if resultado["candidatos"]:
                 lineas.extend(
                     f"- SIS-{item['evento'].id_evento:06d} | "
-                    f"M={item['evento'].magnitud:.1f} | {item['estado']}"
+                    f"M={item['evento'].magnitud:.1f} | "
+                    f"{DialogoCorregirEvento._estado_en_ingles(item['estado'])}"
                     for item in resultado["candidatos"]
                 )
             else:
-                lineas.append("- Ninguno")
+                lineas.append("- None")
 
             lineas.append("")
             if referencia is None:
-                lineas.append("Referencia elegida: ninguna")
+                lineas.append("Selected reference: none")
             else:
                 estado_ref = (
-                    "activo"
+                    "active"
                     if referencia.id_evento in self.sistema._eventos_activos
-                    else "archivado"
+                    else "archived"
                 )
                 lineas.append(
-                    f"Referencia elegida: SIS-{referencia.id_evento:06d} "
+                    f"Selected reference: SIS-{referencia.id_evento:06d} "
                     f"({estado_ref})"
                 )
 
             lineas.append("")
-            lineas.append("Eventos que lo utilizan como referencia:")
+            lineas.append("Events that use it as a reference:")
             if resultado["referenciados_por"]:
                 lineas.extend(
-                    f"- SIS-{item['evento'].id_evento:06d} | {item['estado']}"
+                    f"- SIS-{item['evento'].id_evento:06d} | "
+                    f"{DialogoCorregirEvento._estado_en_ingles(item['estado'])}"
                     for item in resultado["referenciados_por"]
                 )
             else:
-                lineas.append("- Ninguno")
+                lineas.append("- None")
 
             self.texto_asociaciones.setPlainText("\n".join(lineas))
         except ValueError as error:
@@ -1019,11 +1030,11 @@ class VentanaPrincipal(QMainWindow):
         pagina = QWidget()
         division = QSplitter(Qt.Orientation.Horizontal)
 
-        guardar = QGroupBox("Guardar versión")
+        guardar = QGroupBox("Save version")
         guardar_layout = QVBoxLayout(guardar)
         ayuda = QLabel(
-            "Una versión conserva todo el estado operativo, incluida la "
-            "topología AVL, histórico, cola, reloj, parámetros y métricas."
+            "A version keeps the full system state, including the AVL tree, "
+            "history, queue, clock, parameters, and metrics."
         )
         ayuda.setWordWrap(True)
         ayuda.setStyleSheet("color: #52616f;")
@@ -1031,13 +1042,13 @@ class VentanaPrincipal(QMainWindow):
 
         form = QFormLayout()
         self.campo_nombre_version = QLineEdit()
-        self.campo_nombre_version.setPlaceholderText("Ej. Antes de la ráfaga")
-        form.addRow("Nombre", self.campo_nombre_version)
+        self.campo_nombre_version.setPlaceholderText("e.g. Before the event")
+        form.addRow("Name", self.campo_nombre_version)
         guardar_layout.addLayout(form)
-        boton_guardar_version = QPushButton("Guardar versión")
+        boton_guardar_version = QPushButton("Save version")
         boton_guardar_version.clicked.connect(self.guardar_version)
         guardar_layout.addWidget(boton_guardar_version)
-        ruta = QLabel(f"Carpeta: {self.gestor_versiones.directorio}")
+        ruta = QLabel(f"Folder: {self.gestor_versiones.directorio}")
         ruta.setWordWrap(True)
         ruta.setStyleSheet("color: #52616f;")
         guardar_layout.addWidget(ruta)
@@ -1045,19 +1056,19 @@ class VentanaPrincipal(QMainWindow):
 
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
-        listado = QGroupBox("Versiones guardadas")
+        listado = QGroupBox("Saved versions")
         listado_layout = QVBoxLayout(listado)
         self.tabla_versiones = self._crear_tabla(
-            ["Nombre", "Fecha UTC", "Activos", "Históricos", "Altura", "Modo"]
+            ["Name", "Date (UTC)", "Active", "Historical", "Height", "Mode"]
         )
         self.tabla_versiones.itemSelectionChanged.connect(
             self._actualizar_botones_versiones
         )
         listado_layout.addWidget(self.tabla_versiones)
         acciones = QHBoxLayout()
-        self.boton_restaurar_version = QPushButton("Restaurar versión")
+        self.boton_restaurar_version = QPushButton("Restore version")
         self.boton_restaurar_version.clicked.connect(self.restaurar_version)
-        self.boton_eliminar_version = QPushButton("Eliminar versión")
+        self.boton_eliminar_version = QPushButton("Delete version")
         self.boton_eliminar_version.setStyleSheet("background: #ae3e3e;")
         self.boton_eliminar_version.clicked.connect(self.eliminar_version)
         acciones.addWidget(self.boton_restaurar_version)
@@ -1081,11 +1092,11 @@ class VentanaPrincipal(QMainWindow):
 
         # === Barra superior con botón y estado ===
         barra = QHBoxLayout()
-        boton_verificar = QPushButton("Verificar estructura")
+        boton_verificar = QPushButton("Check structure")
         boton_verificar.clicked.connect(self.verificar_estructura)
         barra.addWidget(boton_verificar)
 
-        self.etiqueta_auditoria = QLabel("Sin verificar")
+        self.etiqueta_auditoria = QLabel("Not checked")
         self.etiqueta_auditoria.setStyleSheet(
             "background: #e8eef4; color: #52616f; padding: 9px 14px; "
             "border-radius: 4px; font-weight: 600; font-size: 13px;"
@@ -1095,7 +1106,7 @@ class VentanaPrincipal(QMainWindow):
         layout.addLayout(barra)
 
         # === Errores ===
-        grupo_errores = QGroupBox("Errores encontrados")
+        grupo_errores = QGroupBox("Errors found")
         errores_layout = QVBoxLayout(grupo_errores)
         self.texto_errores = QTextEdit()
         self.texto_errores.setReadOnly(True)
@@ -1105,42 +1116,42 @@ class VentanaPrincipal(QMainWindow):
         layout.addWidget(grupo_errores)
 
         # === Indicadores ===
-        grupo_indicadores = QGroupBox("Indicadores")
+        grupo_indicadores = QGroupBox("Metrics")
         indicadores_layout = QGridLayout(grupo_indicadores)
         indicadores_layout.setSpacing(8)
         indicadores_layout.setContentsMargins(10, 16, 10, 10)
 
         self.etiquetas_auditoria = {}
         campos = [
-            ("activos", "Activos", 0, 0),
-            ("historicos", "Históricos", 0, 1),
-            ("eliminados", "Eliminados", 0, 2),
-            ("altura", "Altura AVL", 0, 3),
-            ("hojas", "Hojas", 0, 4),
+            ("activos", "Active", 0, 0),
+            ("historicos", "Historical", 0, 1),
+            ("eliminados", "Eliminated", 0, 2),
+            ("altura", "AVL height", 0, 3),
+            ("hojas", "Leaves", 0, 4),
 
-            ("rotaciones_realizadas", "Rotaciones", 1, 0),
+            ("rotaciones_realizadas", "Rotations", 1, 0),
             ("casos_ll", "LL", 1, 1),
             ("casos_rr", "RR", 1, 2),
             ("casos_lr", "LR", 1, 3),
             ("casos_rl", "RL", 1, 4),
 
-            ("giros_simples_izquierda", "Giros izq.", 2, 0),
-            ("giros_simples_derecha", "Giros der.", 2, 1),
-            ("correcciones_aceptadas", "Correcciones", 2, 2),
-            ("reportes_descartados", "Descartados", 2, 3),
+            ("giros_simples_izquierda", "Left turns", 2, 0),
+            ("giros_simples_derecha", "Right turns", 2, 1),
+            ("correcciones_aceptadas", "Corrections", 2, 2),
+            ("reportes_descartados", "Discarded", 2, 3),
             ("conflictos", "Conflictos", 2, 4),
 
-            ("confirmaciones", "Confirm.", 3, 0),
-            ("creados_por_reporte", "Creados", 3, 1),
-            ("reactivados", "Reactivados", 3, 2),
-            ("archivos_masivos", "Arch. masivos", 3, 3),
-            ("eventos_archivados", "Archivados", 3, 4),
+            ("confirmaciones", "Confirmed", 3, 0),
+            ("creados_por_reporte", "Created", 3, 1),
+            ("reactivados", "Reactivated", 3, 2),
+            ("archivos_masivos", "Bulk archives", 3, 3),
+            ("eventos_archivados", "Archived", 3, 4),
 
             ("por_prioridad_1", "P1", 4, 0),
             ("por_prioridad_2", "P2", 4, 1),
             ("por_prioridad_3", "P3", 4, 2),
-            ("pendientes", "Pendientes", 4, 3),
-            ("con_acceso_costoso", "Costoso", 4, 4),
+            ("pendientes", "Pending", 4, 3),
+            ("con_acceso_costoso", "Costly", 4, 4),
         ]
 
         for clave, etiqueta, fila, columna in campos:
@@ -1188,7 +1199,7 @@ class VentanaPrincipal(QMainWindow):
         layout.addWidget(grupo_indicadores)
 
         # === Recorridos ===
-        grupo_recorridos = QGroupBox("Recorridos")
+        grupo_recorridos = QGroupBox("Tree traversals")
         recorridos_layout = QVBoxLayout(grupo_recorridos)
         self.texto_recorridos = QTextEdit()
         self.texto_recorridos.setReadOnly(True)
@@ -1211,23 +1222,21 @@ class VentanaPrincipal(QMainWindow):
         reporte = verificar_estructura(self.sistema)
 
         if reporte["ok"]:
-            self.etiqueta_auditoria.setText("Estructura válida")
+            self.etiqueta_auditoria.setText("Structure is valid")
             self.etiqueta_auditoria.setStyleSheet(
                 "background: #d4edda; color: #155d4a; padding: 7px 12px; "
                 "border-radius: 4px; font-weight: 600;"
             )
-            self.texto_errores.setPlainText(
-                "No se encontraron inconsistencias."
-            )
+            self.texto_errores.setPlainText("No inconsistencies were found.")
         else:
             n = len(reporte["errores"])
-            self.etiqueta_auditoria.setText(f"{n} errores encontrados")
+            self.etiqueta_auditoria.setText(f"{n} errors found")
             self.etiqueta_auditoria.setStyleSheet(
                 "background: #fdecea; color: #c0392b; padding: 7px 12px; "
                 "border-radius: 4px; font-weight: 600;"
             )
             self.texto_errores.setPlainText(
-                "\n".join(f"- {e}" for e in reporte["errores"])
+                "\n".join(f"- {self._traducir_mensaje(e)}" for e in reporte["errores"])
             )
 
         self._pintar_indicadores(reporte["indicadores"])
@@ -1264,11 +1273,11 @@ class VentanaPrincipal(QMainWindow):
             self.etiquetas_auditoria[clave].setText(str(valor))
 
         self.texto_recorridos.setPlainText(
-            f"Inorden:     {ind['inorden']}\n"
-            f"Preorden:    {ind['preorden']}\n"
-            f"Postorden:   {ind['postorden']}\n"
-            f"Por niveles: {ind['por_niveles']}\n"
-            f"Nodos por nivel: {ind['nodos_por_nivel']}"
+            f"In-order:     {ind['inorden']}\n"
+            f"Pre-order:    {ind['preorden']}\n"
+            f"Post-order:   {ind['postorden']}\n"
+            f"By level:     {ind['por_niveles']}\n"
+            f"Nodes per level: {ind['nodos_por_nivel']}"
         )
         
     def _actualizar_auditoria(self):
@@ -1294,18 +1303,18 @@ class VentanaPrincipal(QMainWindow):
         campos["fecha"].setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         campos["fecha"].setCalendarPopup(True)
         campos["fecha"].setDateTime(self._qdatetime_del_reloj())
-        campos["estacion"].setPlaceholderText("Ej. ST-01")
+        campos["estacion"].setPlaceholderText("e.g. ST-01")
         form.addRow("ID", campos["id"])
-        form.addRow("Magnitud", campos["magnitud"])
-        form.addRow("Profundidad (km)", campos["profundidad"])
-        form.addRow("Coordenada X", campos["x"])
-        form.addRow("Coordenada Y", campos["y"])
-        form.addRow("Fecha UTC", campos["fecha"])
+        form.addRow("Magnitude", campos["magnitud"])
+        form.addRow("Depth (km)", campos["profundidad"])
+        form.addRow("X coordinate", campos["x"])
+        form.addRow("Y coordinate", campos["y"])
+        form.addRow("Date (UTC)", campos["fecha"])
         if incluir_revision:
             campos["revision"] = QSpinBox()
             campos["revision"].setRange(1, 999999)
             form.addRow("Revision", campos["revision"])
-        form.addRow("Estacion", campos["estacion"])
+        form.addRow("Station", campos["estacion"])
         layout.addLayout(form)
         return campos
 
@@ -1357,13 +1366,13 @@ class VentanaPrincipal(QMainWindow):
     def crear_evento(self):
         try:
             evento = self.sistema.crear_evento(**self._leer_datos(self.campos_evento))
-            self.statusBar().showMessage(f"Evento {evento.id_evento} creado", 4000)
+            self.statusBar().showMessage(f"Event {evento.id_evento} created", 4000)
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
             
     def corregir_evento(self):
-        """Abre el diálogo de corrección para el evento seleccionado."""
+        """Abre el diálogo de edit para el evento selected."""
         event_id = self._id_seleccionado()
         if event_id is None:
             return
@@ -1371,7 +1380,7 @@ class VentanaPrincipal(QMainWindow):
         evento = self.sistema.buscar_por_id(event_id)
         if evento is None:
             self._mostrar_error(
-                f"El evento {event_id} no está activo."
+                f"Event {event_id} is not active."
             )
             return
 
@@ -1390,15 +1399,15 @@ class VentanaPrincipal(QMainWindow):
             and evento.fecha_hora == datos["fecha_hora"]
         ):
             self.statusBar().showMessage(
-                "Sin cambios: el evento no fue modificado", 4000
+                "No changes: the event was not modified.", 4000
             )
             return
 
         try:
             self.sistema.corregir_evento(event_id, **datos)
             self.statusBar().showMessage(
-                f"Evento {event_id} corregido "
-                f"(nueva revisión: {self.sistema.buscar_por_id(event_id).revision})",
+                f"Event {event_id} updated "
+                f"(new revision: {self.sistema.buscar_por_id(event_id).revision})",
                 5000,
             )
             self.actualizar_vistas()
@@ -1411,7 +1420,7 @@ class VentanaPrincipal(QMainWindow):
             return
         try:
             self.sistema.marcar_revisado(event_id)
-            self.statusBar().showMessage(f"Evento {event_id} marcado como revisado", 4000)
+            self.statusBar().showMessage(f"Event {event_id} marked as reviewed", 4000)
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
@@ -1419,37 +1428,39 @@ class VentanaPrincipal(QMainWindow):
     def deshacer(self):
         if self.timer_procesamiento.isActive():
             self.timer_procesamiento.stop()
-            self.boton_procesar_todos.setText("Procesar toda la cola")
+            self.boton_procesar_todos.setText("Process entire queue")
         descripcion = self.sistema.descripcion_ultima_accion()
         if descripcion is None:
-            self.statusBar().showMessage("No hay acciones para deshacer", 4000)
+            self.statusBar().showMessage("There are no actions to undo", 4000)
             return
         if not self.sistema.deshacer():
-            self.statusBar().showMessage("No se pudo deshacer", 4000)
+            self.statusBar().showMessage("The action could not be undone", 4000)
             return
-        self.statusBar().showMessage(f"Deshecho: {descripcion}", 4000)
+        self.statusBar().showMessage(
+            f"Undone: {self._traducir_mensaje(descripcion)}", 4000
+        )
         self.actualizar_vistas()
 
     def _switch_modo_estres(self, activo):
         try:
             if activo:
                 self.sistema.activar_modo_estres()
-                self.statusBar().showMessage("Modo estrés activado", 4000)
+                self.statusBar().showMessage("Stress mode enabled", 4000)
             else:
                 pausado = False
                 if self.timer_procesamiento.isActive():
                     self.timer_procesamiento.stop()
-                    self.boton_procesar_todos.setText("Procesar toda la cola")
+                    self.boton_procesar_todos.setText("Process entire queue")
                     pausado = True
 
                 costo = self.sistema.desactivar_modo_estres()
-                prefijo = "Procesamiento pausado. " if pausado else ""
+                prefijo = "Processing paused. " if pausado else ""
                 self.statusBar().showMessage(
-                    f"{prefijo}Balance recuperado: Altura de "
-                    f"{costo['altura_antes']} a {costo['altura_despues']}, "
-                    f"{costo['giros']} giros, "
-                    f"{costo['nodos_visitados']} nodos visitados, "
-                    f"{costo['pasadas']} pasadas",
+                    f"{prefijo}Balance restored: height from "
+                    f"{costo['altura_antes']} to {costo['altura_despues']}, "
+                    f"{costo['giros']} rotations, "
+                    f"{costo['nodos_visitados']} nodes visited, "
+                    f"{costo['pasadas']} passes",
                     10000,
                 )
             self.actualizar_vistas()
@@ -1462,19 +1473,19 @@ class VentanaPrincipal(QMainWindow):
         self.boton_estres.blockSignals(True)
         self.boton_estres.setChecked(en_estres)
         if en_estres:
-            self.boton_estres.setText("Modo estres: ACTIVO")
+            self.boton_estres.setText("Stress mode: ON")
         else:
-            self.boton_estres.setText("Modo estres")
+            self.boton_estres.setText("Stress mode")
         self.boton_estres.blockSignals(False)
 
     def _actualizar_indicador_modo(self):
         if self.sistema.en_modo_estres():
-            self.etiqueta_modo.setText("Modo: ESTRÉS")
+            self.etiqueta_modo.setText("Mode: STRESS")
             self.etiqueta_modo.setStyleSheet(
                 "color: #c0392b; font-weight: 600; padding-right: 10px;"
             )
         else:
-            self.etiqueta_modo.setText("Modo: normal")
+            self.etiqueta_modo.setText("Mode: normal")
             self.etiqueta_modo.setStyleSheet(
                 "color: #52616f; padding-right: 10px;"
             )
@@ -1484,8 +1495,8 @@ class VentanaPrincipal(QMainWindow):
         if event_id is None:
             return
         respuesta = QMessageBox.question(
-            self, "Eliminar evento",
-            f"El evento {event_id} no podra reactivarse. Deseas eliminarlo?",
+            self, "Delete event",
+            f"Event {event_id} cannot be restored after deletion. Delete it?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -1493,7 +1504,7 @@ class VentanaPrincipal(QMainWindow):
             return
         try:
             self.sistema.eliminar_evento(event_id)
-            self.statusBar().showMessage(f"Evento {event_id} eliminado", 4000)
+            self.statusBar().showMessage(f"Event {event_id} deleted", 4000)
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
@@ -1503,7 +1514,7 @@ class VentanaPrincipal(QMainWindow):
             datos = self._leer_datos(self.campos_reporte)
             reporte = Reporte(revision=self.campos_reporte["revision"].value(), **datos)
             self.sistema.encolar_reporte(reporte)
-            self.statusBar().showMessage("Reporte agregado a la cola", 4000)
+            self.statusBar().showMessage("Report added to the queue", 4000)
             self.actualizar_vistas()
         except ValueError as error:
             self._mostrar_error(str(error))
@@ -1515,25 +1526,25 @@ class VentanaPrincipal(QMainWindow):
     def procesar_todos_los_reportes(self):
         if self.timer_procesamiento.isActive():
             self.timer_procesamiento.stop()
-            self.boton_procesar_todos.setText("Procesar toda la cola")
-            self.statusBar().showMessage("Procesamiento pausado", 3000)
+            self.boton_procesar_todos.setText("Process entire queue")
+            self.statusBar().showMessage("Processing paused", 3000)
             return
         if not self.sistema.hay_reportes_pendientes():
-            self.statusBar().showMessage("No hay reportes pendientes", 3000)
+            self.statusBar().showMessage("There are no pending reports", 3000)
             return
         self.timer_procesamiento.start()
-        self.boton_procesar_todos.setText("Pausar procesamiento")
-        self.statusBar().showMessage("Procesando cola...", 3000)
+        self.boton_procesar_todos.setText("Pause processing")
+        self.statusBar().showMessage("Processing queue...", 3000)
 
     def agregar_zona(self):
         nombre = self.nombre_zona.text().strip()
         if not nombre:
-            self._mostrar_error("El nombre de la zona es obligatorio")
+            self._mostrar_error("A zone name is required.")
             return
         if (self.x_min_zona.value() > self.x_max_zona.value()
                 or self.y_min_zona.value() > self.y_max_zona.value()):
             self._mostrar_error(
-                "Los valores minimos no pueden ser mayores que los maximos"
+                "Minimum values cannot be greater than maximum values."
             )
             return
         zona = Zona(
@@ -1544,8 +1555,8 @@ class VentanaPrincipal(QMainWindow):
         try:
             afectados = self.sistema.agregar_zona(zona)
             self.statusBar().showMessage(
-                f"Zona '{nombre}' agregada. "
-                f"{afectados} eventos cambiaron de prioridad.",
+                f"Zone '{zona.nombre}' added. "
+                f"{afectados} events changed priority.",
                 5000,
             )
             self.actualizar_vistas()
@@ -1573,16 +1584,16 @@ class VentanaPrincipal(QMainWindow):
         self.boton_deshacer.setEnabled(puede)
         if puede:
             descripcion = self.sistema.descripcion_ultima_accion()
-            self.boton_deshacer.setToolTip(f"Deshacer: {descripcion}")
+            f"Undo: {self._traducir_mensaje(descripcion)}", 5000
         else:
-            self.boton_deshacer.setToolTip("No hay acciones para deshacer")
+            self.boton_deshacer.setToolTip("There are no actions to undo")
 
     def _actualizar_tabla_versiones(self):
         try:
             versiones = self.gestor_versiones.listar()
         except ErrorVersionesPersistentes as error:
             self.tabla_versiones.setRowCount(0)
-            self.statusBar().showMessage(f"Catálogo de versiones inválido: {error}", 8000)
+            self.statusBar().showMessage(f"Invalid version catalog: {self._traducir_mensaje(str(error))}", 8000)
             self._actualizar_botones_versiones()
             return
 
@@ -1594,7 +1605,7 @@ class VentanaPrincipal(QMainWindow):
                 version["active_events"],
                 version["historical_events"],
                 version["avl_height"],
-                "Estrés" if version["stress_mode"] else "Normal",
+                "Stress" if version["stress_mode"] else "Normal",
             ]
             for columna, valor in enumerate(valores):
                 item = QTableWidgetItem(str(valor))
@@ -1619,7 +1630,7 @@ class VentanaPrincipal(QMainWindow):
     def _actualizar_reloj(self):
         instante = self.sistema.reloj.instante
         self.etiqueta_reloj.setText(
-            "Reloj UTC: " + instante.strftime("%Y-%m-%d %H:%M:%S")
+            "UTC clock: " + instante.strftime("%Y-%m-%d %H:%M:%S")
         )
         if not self.campo_salto.hasFocus():
             self.campo_salto.setDateTime(self._qdatetime_del_reloj())
@@ -1641,10 +1652,11 @@ class VentanaPrincipal(QMainWindow):
         eventos = self.sistema.avl.in_order()
         self._actualizar_grafico_arbol()
         if not eventos:
-            self.texto_inorden.setPlainText("Aun no hay eventos en el AVL.")
+            self.texto_inorden.setPlainText("There are no events in the AVL yet.")
             return
         lineas = [
-            f"ID {evento.id_evento} | clave {evento.calcular_clave()} | {evento.estado}"
+            f"ID {evento.id_evento} | key {evento.calcular_clave()} | "
+            f"{DialogoCorregirEvento._estado_en_ingles(evento.estado)}"
             for evento in eventos
         ]
         self.texto_inorden.setPlainText("\n".join(lineas))
@@ -1656,9 +1668,9 @@ class VentanaPrincipal(QMainWindow):
             valores = [
                 evento.id_evento, f"{evento.magnitud:.1f}",
                 f"{evento.profundidad:.1f}", f"P{evento.prioridad}",
-                evento.revision, evento.estado,
-                "Poblada" if evento.en_zona_poblada else "No poblada",
-                "Sí" if evento.acceso_costoso else "No",
+                evento.revision, DialogoCorregirEvento._estado_en_ingles(evento.estado),
+                "Populated" if evento.en_zona_poblada else "Not populated",
+                "Yes" if evento.acceso_costoso else "No",
             ]
             for columna, valor in enumerate(valores):
                 item = QTableWidgetItem(str(valor))
@@ -1770,7 +1782,7 @@ class VentanaPrincipal(QMainWindow):
     def _dibujar_arbol_comparativo(self, escena, raiz, nombre_arbol):
         escena.clear()
         if raiz is None:
-            texto = escena.addText(f"No hay nodos en el {nombre_arbol}")
+            texto = escena.addText(f"There are no nodes in the {nombre_arbol}")
             texto.setDefaultTextColor(QColor("#52616f"))
             texto.setPos(20, 20)
             escena.setSceneRect(0, 0, 500, 120)
@@ -1857,7 +1869,7 @@ class VentanaPrincipal(QMainWindow):
                 f"{evento.magnitud:.1f}",
                 f"P{evento.prioridad}",
                 evento.revision,
-                evento.estado,
+                DialogoCorregirEvento._estado_en_ingles(evento.estado),
                 evento.fecha_hora.strftime("%Y-%m-%d %H:%M:%S"),
             ]
             for columna, valor in enumerate(valores):
@@ -1875,7 +1887,7 @@ class VentanaPrincipal(QMainWindow):
             self._archivo_previsualizado = None
             self.boton_archivar_rama.setEnabled(False)
             self.etiqueta_previsualizacion_archivo.setText(
-                f"No se pudo evaluar el archivo: {error}"
+                f"Could not check the archive: {self._traducir_mensaje(str(error))}"
             )
             return
 
@@ -1883,10 +1895,10 @@ class VentanaPrincipal(QMainWindow):
         self.boton_archivar_rama.setEnabled(resultado["elegible"])
         if resultado["elegible"]:
             self.etiqueta_previsualizacion_archivo.setText(
-                f"Rama lista para archivar\n\n"
-                f"Raíz: SIS-{resultado['raiz'].id_evento:06d}\n"
-                f"Profundidad: {resultado['profundidad']}\n"
-                f"Eventos: {resultado['cantidad']}\n"
+                f"Branch is ready to archive\n\n"
+                f"Root: SIS-{resultado['raiz'].id_evento:06d}\n"
+                f"Depth: {resultado['profundidad']}\n"
+                f"Events: {resultado['cantidad']}\n"
                 f"IDs: {', '.join(map(str, sorted(resultado['ids'])))}"
             )
             return
@@ -1899,18 +1911,18 @@ class VentanaPrincipal(QMainWindow):
             > self.sistema.parametros.t
         ]
         self.etiqueta_previsualizacion_archivo.setText(
-            "No hay una rama elegible para archivar.\n\n"
-            f"Eventos activos: {len(eventos)}\n"
-            f"Prioridad baja: {len(prioridad_baja)}\n"
-            f"Bajos con antigüedad mayor que T: {len(antiguos)}\n"
-            f"T actual: {self.sistema.parametros.t:.1f} horas"
+            "There is no eligible branch to archive.\n\n"
+            f"Active events: {len(eventos)}\n"
+            f"Low priority: {len(prioridad_baja)}\n"
+            f"Low priority older than T: {len(antiguos)}\n"
+            f"Current T: {self.sistema.parametros.t:.1f} hours"
         )
 
     def _actualizar_detalle_historico(self):
         fila = self.tabla_historico.currentRow()
         if fila < 0:
             self.texto_detalle_historico.setPlainText(
-                "Selecciona un evento archivado para ver sus datos."
+                "Select an archived event to view its details."
             )
             return
         item = self.tabla_historico.item(fila, 0)
@@ -1920,19 +1932,19 @@ class VentanaPrincipal(QMainWindow):
         evento = self.sistema._historicos.get(event_id)
         if evento is None:
             return
-        referencia = evento.referencia if evento.referencia is not None else "Sin referencia"
+        referencia = evento.referencia if evento.referencia is not None else "None"
         texto = (
             f"ID: {evento.id_evento}\n"
-            f"Clave: {evento.calcular_clave()}\n"
-            f"Magnitud: {evento.magnitud:.1f}\n"
-            f"Profundidad: {evento.profundidad:.1f} km\n"
-            f"Epicentro: ({evento.x:.1f}, {evento.y:.1f})\n"
-            f"Fecha UTC: {evento.fecha_hora.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"Revisión: {evento.revision}\n"
-            f"Estado: {evento.estado}\n"
-            f"Estaciones: {', '.join(sorted(evento.estaciones)) or '-'}\n"
-            f"Referencia: {referencia}\n"
-            f"Referenciado por: {', '.join(map(str, sorted(evento.referenciado_por))) or '-'}"
+            f"Key: {evento.calcular_clave()}\n"
+            f"Magnitude: {evento.magnitud:.1f}\n"
+            f"Depth: {evento.profundidad:.1f} km\n"
+            f"Epicenter: ({evento.x:.1f}, {evento.y:.1f})\n"
+            f"Date (UTC): {evento.fecha_hora.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Revision: {evento.revision}\n"
+            f"Status: {DialogoCorregirEvento._estado_en_ingles(evento.estado)}\n"
+            f"Stations: {', '.join(sorted(evento.estaciones)) or '-'}\n"
+            f"Reference: {referencia}\n"
+            f"Referenced by: {', '.join(map(str, sorted(evento.referenciado_por))) or '-'}"
         )
         self.texto_detalle_historico.setPlainText(texto)
 
@@ -1946,8 +1958,8 @@ class VentanaPrincipal(QMainWindow):
             return
         respuesta = QMessageBox.question(
             self,
-            "Archivar rama",
-            f"Se archivarán {resultado['cantidad']} eventos: "
+            "Archive branch",
+            f"{resultado['cantidad']} events will be archived: "
             f"{', '.join(map(str, sorted(resultado['ids'])))}.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -1961,15 +1973,16 @@ class VentanaPrincipal(QMainWindow):
             return
         self._archivo_previsualizado = None
         self.boton_archivar_rama.setEnabled(False)
-        self.etiqueta_previsualizacion_archivo.setText(resultado["mensaje"])
-        self.statusBar().showMessage(resultado["mensaje"], 5000)
+        mensaje = f"Archived branch rooted at event {resultado['raiz'].id_evento}."
+        self.etiqueta_previsualizacion_archivo.setText(mensaje)
+        self.statusBar().showMessage(mensaje, 5000)
         self.actualizar_vistas()
 
     def _actualizar_grafico_arbol(self):
         self.escena_arbol.clear()
         raiz = self.sistema.avl.root
         if raiz is None:
-            texto = self.escena_arbol.addText("Aun no hay nodos en el AVL")
+            texto = self.escena_arbol.addText("There are no nodes in the AVL yet")
             texto.setDefaultTextColor(QColor("#52616f"))
             texto.setPos(20, 20)
             self.escena_arbol.setSceneRect(0, 0, 500, 120)
@@ -2090,17 +2103,28 @@ class VentanaPrincipal(QMainWindow):
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     def _mostrar_resultados(self, resultados):
+        decisions = {
+            "rechazado": "rejected",
+            "reactivado": "reactivated",
+            "archivado_ignorado": "archive ignored",
+            "creado": "created",
+            "corregido": "updated",
+            "confirmado": "confirmed",
+            "conflicto": "conflict",
+            "antiguo": "outdated",
+        }
         lineas = []
         for indice, resultado in enumerate(resultados, start=1):
             evento = resultado.get("evento")
-            evento_texto = f"Evento: {evento.id_evento}" if evento else "Evento: -"
-            rotaciones = resultado.get("rotaciones", []) or ["ninguna"]
+            evento_texto = f"Event: {evento.id_evento}" if evento else "Event: -"
+            rotaciones = resultado.get("rotaciones", []) or ["none"]
             lineas.append(
-                f"Paso {indice}: {resultado['decision']}\n{resultado['mensaje']}\n"
-                f"{evento_texto}\nRotaciones: {', '.join(rotaciones)}"
+                f"Step {indice}: {decisions.get(resultado['decision'], resultado['decision'])}\n"
+                f"{self._traducir_mensaje(resultado['mensaje'])}\n"
+                f"{evento_texto}\nRotations: {', '.join(rotaciones)}"
             )
         self.texto_resultado.setPlainText("\n\n".join(lineas))
-        self.statusBar().showMessage("Procesamiento de reportes terminado", 4000)
+        self.statusBar().showMessage("Report processing complete", 4000)
 
     # =========================================================
     # PERSISTENT VERSIONS
@@ -2120,7 +2144,7 @@ class VentanaPrincipal(QMainWindow):
         self.campo_nombre_version.clear()
         self.actualizar_vistas()
         self.statusBar().showMessage(
-            f"Versión '{version['name']}' guardada", 5000
+            f"Version '{version['name']}' saved", 5000
         )
 
     def restaurar_version(self):
@@ -2129,9 +2153,9 @@ class VentanaPrincipal(QMainWindow):
             return
         respuesta = QMessageBox.question(
             self,
-            "Restaurar versión",
-            f"Se reemplazará el estado actual por la versión '{nombre}'.\n"
-            "Podrás deshacer esta restauración.",
+            "Restore version",
+            f"The current state will be replaced with version '{nombre}'.\n"
+            "You can undo this restore.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -2154,7 +2178,7 @@ class VentanaPrincipal(QMainWindow):
         self.bst_comparativo = None
         self.actualizar_vistas()
         self.statusBar().showMessage(
-            f"Versión '{nombre}' restaurada", 5000
+            f"Version '{nombre}' restored", 5000
         )
 
     def eliminar_version(self):
@@ -2163,8 +2187,8 @@ class VentanaPrincipal(QMainWindow):
             return
         respuesta = QMessageBox.question(
             self,
-            "Eliminar versión",
-            f"La versión '{nombre}' se eliminará permanentemente.",
+            "Delete version",
+            f"Version '{nombre}' will be deleted permanently.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -2177,7 +2201,7 @@ class VentanaPrincipal(QMainWindow):
             return
         self.actualizar_vistas()
         self.statusBar().showMessage(
-            f"Versión '{nombre}' eliminada", 5000
+            f"Version '{nombre}' deleted", 5000
         )
         
     # =========================================================
@@ -2196,7 +2220,7 @@ class VentanaPrincipal(QMainWindow):
             self,
             titulo,
             str(self._data_dir()),
-            "Archivos JSON (*.json *.JSON);;Todos los archivos (*)",
+            "JSON files (*.json *.JSON);;All files (*)",
         )
         return ruta
 
@@ -2205,9 +2229,9 @@ class VentanaPrincipal(QMainWindow):
         ruta_sugerida = str(self._data_dir() / "sismolab_estado.json")
         ruta, _ = QFileDialog.getSaveFileName(
             self,
-            "Guardar estado del sistema",
+            "Save system state",
             ruta_sugerida,
-            "Archivos JSON (*.json)",
+            "JSON files (*.json)",
         )
         if not ruta:
             return
@@ -2218,17 +2242,17 @@ class VentanaPrincipal(QMainWindow):
                 f"Guardado en: {destino}", 6000
             )
             QMessageBox.information(
-                self, "Guardado exitoso",
-                f"Estado guardado en:\n{destino}",
+                self, "Save complete",
+                f"State saved to:\n{destino}",
             )
         except Exception as e:
             QMessageBox.critical(
-                self, "Error al guardar",
-                f"No se pudo guardar el archivo:\n{e}",
+                self, "Save error",
+                f"Could not save the file:\n{self._traducir_mensaje(str(e))}",
             )
 
     def cargar_json_topologia(self):
-        ruta = self._seleccionar_archivo_json("Cargar topología desde JSON")
+        ruta = self._seleccionar_archivo_json("Load topology from JSON")
         if not ruta:
             return
 
@@ -2238,16 +2262,16 @@ class VentanaPrincipal(QMainWindow):
             )
         except ErrorJsonPersistencia as e:
             QMessageBox.critical(
-                self, "JSON inválido",
-                f"El archivo no se pudo cargar:\n\n{e}\n\n"
-                f"El sistema actual no fue modificado.",
+                self, "Invalid JSON",
+                f"Could not load the file:\n\n{self._traducir_mensaje(str(e))}\n\n"
+                f"The current system was not changed.",
             )
             return
         except Exception as e:
             QMessageBox.critical(
-                self, "Error inesperado",
-                f"Ocurrió un error al cargar:\n{e}\n\n"
-                f"El sistema actual no fue modificado.",
+                self, "Unexpected error",
+                f"An error occurred while loading:\n{self._traducir_mensaje(str(e))}\n\n"
+                f"The current system was not changed.",
             )
             return
 
@@ -2255,19 +2279,19 @@ class VentanaPrincipal(QMainWindow):
         self.bst_comparativo = None
         self.actualizar_vistas()
         self.statusBar().showMessage(
-            f"Topología cargada desde: {ruta}", 6000
+            f"Topology loaded from: {ruta}", 6000
         )
         QMessageBox.information(
-            self, "Carga exitosa",
-            f"Se restauró el escenario desde:\n{ruta}\n\n"
-            f"Eventos activos: {self.sistema.avl.size()}\n"
-            f"Altura del AVL: {self.sistema.avl.height()}\n"
-            f"Modo estrés: {'activo' if self.sistema.en_modo_estres() else 'inactivo'}",
+            self, "Load complete",
+            f"Scenario restored from:\n{ruta}\n\n"
+            f"Active events: {self.sistema.avl.size()}\n"
+            f"AVL height: {self.sistema.avl.height()}\n"
+            f"Stress mode: {'on' if self.sistema.en_modo_estres() else 'off'}",
         )
 
     def cargar_json_inserciones(self):
         ruta = self._seleccionar_archivo_json(
-            "Cargar por inserciones desde JSON"
+            "Load by insertion sequence from JSON"
         )
         if not ruta:
             return
@@ -2276,15 +2300,15 @@ class VentanaPrincipal(QMainWindow):
             sistema_nuevo, bst = JsonLoader.cargar_por_inserciones(ruta)
         except ErrorJsonPersistencia as e:
             QMessageBox.critical(
-                self, "JSON inválido",
-                f"El archivo no se pudo cargar:\n\n{e}\n\n"
-                f"El sistema actual no fue modificado.",
+                self, "Invalid JSON",
+                f"Could not load the file:\n\n{e}\n\n"
+                f"The current system was not changed.",
             )
             return
         except Exception as e:
             QMessageBox.critical(
-                self, "Error inesperado",
-                f"Ocurrió un error al cargar:\n{e}",
+                self, "Unexpected error",
+                f"An error occurred while loading:\n{self._traducir_mensaje(str(e))}",
             )
             return
 
@@ -2297,33 +2321,33 @@ class VentanaPrincipal(QMainWindow):
         inorden_bst = [e.id_evento for e in bst.in_order()]
 
         mensaje = (
-            f"Archivo: {ruta}\n\n"
-            f"=== AVL (balanceado) ===\n"
-            f"  Altura:  {sistema_nuevo.avl.height()}\n"
-            f"  Nodos:   {sistema_nuevo.avl.size()}\n"
-            f"  Hojas:   {sistema_nuevo.avl.number_of_leaves()}\n"
-            f"  Raíz:    {sistema_nuevo.avl.root.event.id_evento if sistema_nuevo.avl.root else '-'}\n\n"
-            f"=== BST (sin balanceo) ===\n"
-            f"  Altura:  {bst.height()}\n"
-            f"  Nodos:   {bst.size()}\n"
-            f"  Hojas:   {bst.number_of_leaves()}\n"
-            f"  Raíz:    {bst.root.event.id_evento if bst.root else '-'}\n\n"
-            f"Inorden AVL == Inorden BST: "
-            f"{'SÍ' if inorden_avl == inorden_bst else 'NO'}"
+            f"File: {ruta}\n\n"
+            f"=== AVL (balanced) ===\n"
+            f"  Height:  {sistema_nuevo.avl.height()}\n"
+            f"  Nodes:   {sistema_nuevo.avl.size()}\n"
+            f"  Leaves:   {sistema_nuevo.avl.number_of_leaves()}\n"
+            f"  Root:    {sistema_nuevo.avl.root.event.id_evento if sistema_nuevo.avl.root else '-'}\n\n"
+            f"=== BST (unbalanced) ===\n"
+            f"  Height:  {bst.height()}\n"
+            f"  Nodes:   {bst.size()}\n"
+            f"  Leaves:   {bst.number_of_leaves()}\n"
+            f"  Root:    {bst.root.event.id_evento if bst.root else '-'}\n\n"
+            f"AVL in-order == BST in-order: "
+            f"{'YES' if inorden_avl == inorden_bst else 'NO'}"
         )
 
-        QMessageBox.information(self, "Comparación AVL vs BST", mensaje)
+        QMessageBox.information(self, "AVL vs BST comparison", mensaje)
         self.statusBar().showMessage(
-            f"Inserciones cargadas desde: {ruta}. "
-            f"Ve al tab 'AVL vs BST' para ver los árboles.", 8000
+            f"Insertion sequence loaded from: {ruta}. "
+            f"Open the 'AVL vs BST' tab to view the trees.", 8000
         )
     
     def _mostrar_acceso_costoso(self):
         eventos = self.sistema.eventos_con_acceso_costoso()
         if not eventos:
             QMessageBox.information(
-                self, "Acceso costoso",
-                "No hay eventos de prioridad alta con acceso costoso."
+                self, "Costly searches",
+                "There are no high-priority events with costly searches."
             )
             return
         lineas = []
@@ -2331,16 +2355,76 @@ class VentanaPrincipal(QMainWindow):
             evento = item["evento"]
             lineas.append(
                 f"ID {evento.id_evento} | P{evento.prioridad} | "
-                f"M{evento.magnitud:.1f} | profundidad {item['profundidad']} | "
-                f"L={item['limite']} | visitados {item['nodos_visitados']}"
+            f"M{evento.magnitud:.1f} | Depth {item['profundidad']} | "
+            f"L={item['limite']} | visited {item['nodos_visitados']}"
             )
         QMessageBox.information(
-            self, "Eventos con acceso costoso",
+            self, "Events with costly searches",
             "\n".join(lineas)
         )
 
     def _mostrar_error(self, mensaje):
-        QMessageBox.warning(self, "Dato no valido", mensaje)
+        QMessageBox.warning(self, "Invalid input", self._traducir_mensaje(mensaje))
+
+    @staticmethod
+    def _traducir_mensaje(mensaje):
+        words = {
+            "el": "the", "la": "the", "los": "the", "las": "the",
+            "un": "a", "una": "a", "de": "of", "del": "of the",
+            "en": "in", "con": "with", "por": "by", "para": "for",
+            "y": "and", "o": "or", "no": "not", "evento": "event",
+            "eventos": "events", "estacion": "station", "identificador": "identifier",
+            "revision": "revision", "magnitud": "magnitude", "profundidad": "depth",
+            "fecha": "date", "zona": "zone", "zonas": "zones", "valor": "value",
+            "valores": "values", "nombre": "name", "estado": "status",
+            "referencia": "reference", "activo": "active", "activos": "active",
+            "historical": "historical", "eliminado": "deleted", "deleted": "deleted",
+            "archivo": "archive", "rama": "branch", "arbol": "tree", "json": "JSON",
+            "invalido": "invalid", "invalida": "invalid", "obligatorio": "required",
+            "obligatoria": "required", "vacio": "empty", "vacia": "empty",
+            "falta": "missing", "faltan": "missing", "debe": "must", "puede": "can",
+            "ser": "be", "mayor": "greater", "menor": "less", "maximo": "maximum",
+            "minimo": "minimum", "positivo": "positive", "positiva": "positive",
+            "numero": "number", "entero": "integer", "texto": "text",
+            "duplicado": "duplicated", "duplicada": "duplicated", "existe": "exists",
+            "inesperado": "unexpected", "error": "error", "cargar": "load",
+            "carga": "load", "guardar": "save", "modificado": "changed",
+            "modificada": "changed", "actual": "current", "sistema": "system",
+            "compatible": "compatible", "campo": "field", "campos": "fields",
+            "esquema": "schema", "version": "version", "altura": "height",
+            "factor": "factor", "raiz": "root", "nodo": "node", "nodos": "nodes",
+            "padre": "parent", "ciclo": "cycle", "estructura": "structure",
+            "requerido": "required", "requerida": "required", "estaciones": "stations",
+            "admite": "allows", "decimal": "decimal", "decimales": "decimals",
+            "hora": "time", "reloj": "clock", "posterior": "later", "anterior": "earlier",
+            "selected": "selected", "seleccionada": "selected", "archivado": "archived",
+            "reportes": "reports", "reporte": "report", "pendiente": "pending",
+            "reactivado": "reactivated", "reactivada": "reactivated",
+            "corregido": "updated", "corregida": "updated", "confirmado": "confirmed",
+            "confirmada": "confirmed", "rechazado": "rejected", "rechazada": "rejected",
+            "descartado": "discarded", "descartada": "discarded", "desde": "from",
+            "misma": "same", "mismo": "same", "datos": "data", "distinto": "different",
+            "distintos": "different", "menor": "less", "que": "than", "una": "a",
+            "por": "by", "con": "with", "mas": "more", "fue": "was",
+            "distintos": "different", "distintas": "different", "misma": "same", "mismo": "same",
+            "limite": "limit", "limites": "limits", "poblada": "populated",
+            "coordenada": "coordinate", "coordenadas": "coordinates", "encontrado": "found",
+            "encontrada": "found", "correcto": "correct", "valido": "valid", "valida": "valid",
+            "esperado": "expected", "esperada": "expected", "almacenado": "stored",
+            "almacenada": "stored", "fuera": "outside", "topologia": "topology",
+            "mas": "more", "menos": "less", "conservar": "keep", "contiene": "contains",
+            "requiere": "requires", "deben": "must", "tener": "have", "entre": "between",
+            "linea": "line", "mensaje": "message", "procesado": "processed", "cola": "queue",
+        }
+        normalized = unicodedata.normalize("NFD", str(mensaje))
+        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+
+        def replace_word(match):
+            word = match.group(0)
+            translated = words.get(word.lower(), word)
+            return translated.capitalize() if word[:1].isupper() else translated
+
+        return re.sub(r"[A-Za-z]+", replace_word, normalized)
 
 
 def ejecutar_aplicacion():
