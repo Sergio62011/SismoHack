@@ -8,8 +8,6 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDateTimeEdit,
-    QDialog,
-    QDialogButtonBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -88,109 +86,6 @@ class TreeViewWithZoom(QGraphicsView):
             super().wheelEvent(event)
 
 
-class CorrectEventDialog(QDialog):
-    """Modal dialog to correct the data of an active event."""
-
-    def __init__(self, event, parent=None):
-        super().__init__(parent)
-        self.event = event
-        self.setWindowTitle(f"Correct event SIS-{event.event_id:06d}")
-        self.setMinimumWidth(420)
-        self._build_ui()
-
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-
-        info = QLabel(
-            f"<b>ID:</b> {self.event.event_id}<br>"
-            f"<b>Current revision:</b> {self.event.revision}<br>"
-            f"<b>State:</b> {self.event.state}<br>"
-            f"<b>Current priority:</b> P{self.event.priority}"
-        )
-        info.setStyleSheet(
-            "background: #e8eef4; padding: 10px; border-radius: 5px;"
-            "color: #172b4d;"
-        )
-        layout.addWidget(info)
-
-        form = QFormLayout()
-        form.setSpacing(8)
-
-        self.magnitude_field = QDoubleSpinBox()
-        self.magnitude_field.setRange(-2.0, 10.0)
-        self.magnitude_field.setDecimals(1)
-        self.magnitude_field.setSingleStep(0.1)
-        self.magnitude_field.setValue(self.event.magnitude)
-
-        self.depth_field = QDoubleSpinBox()
-        self.depth_field.setRange(0.0, 700.0)
-        self.depth_field.setDecimals(1)
-        self.depth_field.setSingleStep(0.1)
-        self.depth_field.setValue(self.event.depth)
-
-        self.x_field = QDoubleSpinBox()
-        self.x_field.setRange(0.0, 1000.0)
-        self.x_field.setDecimals(1)
-        self.x_field.setSingleStep(0.1)
-        self.x_field.setValue(self.event.x)
-
-        self.y_field = QDoubleSpinBox()
-        self.y_field.setRange(0.0, 1000.0)
-        self.y_field.setDecimals(1)
-        self.y_field.setSingleStep(0.1)
-        self.y_field.setValue(self.event.y)
-
-        self.datetime_field = QDateTimeEdit()
-        self.datetime_field.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-        self.datetime_field.setCalendarPopup(True)
-        self.datetime_field.setDateTime(
-            QDateTime.fromString(
-                self.event.datetime.strftime("%Y-%m-%d %H:%M:%S"),
-                "yyyy-MM-dd HH:mm:ss",
-            )
-        )
-
-        form.addRow("Magnitude", self.magnitude_field)
-        form.addRow("Depth (km)", self.depth_field)
-        form.addRow("Coordinate X", self.x_field)
-        form.addRow("Coordinate Y", self.y_field)
-        form.addRow("Datetime UTC", self.datetime_field)
-        layout.addLayout(form)
-
-        note = QLabel(
-            "When corrected, the revision will increase by 1 and the "
-            "event will return to the 'pending' state."
-        )
-        note.setWordWrap(True)
-        note.setStyleSheet("color: #52616f; font-size: 11px;")
-        layout.addWidget(note)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Correct")
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancel")
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def data(self):
-        """Returns the new event data ready for the service."""
-        dt = datetime.strptime(
-            self.datetime_field.dateTime().toString("yyyy-MM-dd HH:mm:ss"),
-            "%Y-%m-%d %H:%M:%S",
-        ).replace(tzinfo=timezone.utc)
-        return {
-            "magnitude": self.magnitude_field.value(),
-            "depth": self.depth_field.value(),
-            "x": self.x_field.value(),
-            "y": self.y_field.value(),
-            "datetime": dt,
-        }
-
-
 class MainWindow(QMainWindow):
     """Desktop view that uses the existing SismoLab service."""
 
@@ -201,6 +96,8 @@ class MainWindow(QMainWindow):
             self._data_dir() / "versions"
         )
         self.comparison_bst = None
+        self._populating_table = False
+        self._editable_columns = {1, 2, 3, 4}  # Magnitude, Depth, X, Y
         self._build_window()
         self._create_clock_timer()
         self._create_processing_timer()
@@ -484,6 +381,7 @@ class MainWindow(QMainWindow):
     def _build_events(self):
         page = QWidget()
         splitter = QSplitter(Qt.Orientation.Horizontal)
+
         form = QGroupBox("Create event")
         form_layout = QVBoxLayout(form)
         self.event_fields = self._build_form(form_layout)
@@ -494,27 +392,26 @@ class MainWindow(QMainWindow):
 
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
-        table_group = QGroupBox("Active events")
+
+        table_group = QGroupBox(
+            "Active events — double-click Magnitude / Depth / X / Y to correct"
+        )
         table_layout = QVBoxLayout(table_group)
         self.events_table = self._build_table(
-            ["ID", "Magnitude", "Depth", "Priority", "Revision",
-             "State", "Zone", "Cost"]
+            ["ID", "Magnitude", "Depth", "X", "Y",
+             "Priority", "Revision", "State", "Zone", "Cost"]
         )
-        self.events_table.itemSelectionChanged.connect(
-            self._update_event_buttons
+        self.events_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.EditKeyPressed
         )
-        self.events_table.itemDoubleClicked.connect(
-            lambda _item: self.correct_event()
-        )
+        self._populating_table = False
+        self.events_table.itemChanged.connect(self._on_event_cell_changed)
+        self.events_table.itemSelectionChanged.connect(self._update_event_buttons)
         table_layout.addWidget(self.events_table)
         panel_layout.addWidget(table_group, 1)
 
         actions = QHBoxLayout()
-
-        self.correct_button = QPushButton("Correct event")
-        self.correct_button.clicked.connect(self.correct_event)
-        self.correct_button.setEnabled(False)
-        actions.addWidget(self.correct_button)
 
         self.review_button = QPushButton("Mark as reviewed")
         self.review_button.clicked.connect(self.mark_reviewed)
@@ -529,9 +426,11 @@ class MainWindow(QMainWindow):
 
         actions.addStretch()
         panel_layout.addLayout(actions)
+
         splitter.addWidget(form)
         splitter.addWidget(panel)
         splitter.setSizes([330, 780])
+
         layout = QVBoxLayout(page)
         layout.addWidget(splitter)
         return page
@@ -1366,47 +1265,72 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
-    def correct_event(self):
-        """Opens the correction dialog for the selected event."""
-        event_id = self._selected_id()
-        if event_id is None:
+    def _on_event_cell_changed(self, item):
+        """Called when the user edits a cell in the events table."""
+        if self._populating_table:
+            return
+        column = item.column()
+        if column not in self._editable_columns:
             return
 
+        row = item.row()
+        id_item = self.events_table.item(row, 0)
+        if id_item is None:
+            return
+        event_id = id_item.data(Qt.ItemDataRole.UserRole)
         event = self.system.find_by_id(event_id)
         if event is None:
-            self._show_error(
-                f"Event {event_id} is not active."
-            )
-            return
-
-        dialog = CorrectEventDialog(event, parent=self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-
-        data = dialog.data()
-
-        if (
-            round(event.magnitude, 1) == round(data["magnitude"], 1)
-            and round(event.depth, 1) == round(data["depth"], 1)
-            and round(event.x, 1) == round(data["x"], 1)
-            and round(event.y, 1) == round(data["y"], 1)
-            and event.datetime == data["datetime"]
-        ):
-            self.statusBar().showMessage(
-                "No changes: the event was not modified", 4000
-            )
+            self.update_views()
             return
 
         try:
-            self.system.correct_event(event_id, **data)
-            self.statusBar().showMessage(
-                f"Event {event_id} corrected "
-                f"(new revision: {self.system.find_by_id(event_id).revision})",
-                5000,
+            raw = item.text().strip().replace(",", ".")
+            value = round(float(raw), 1)
+        except ValueError:
+            QMessageBox.warning(
+                self, "Invalid value",
+                f"'{item.text()}' is not a valid number."
             )
             self.update_views()
-        except ValueError as error:
-            self._show_error(str(error))
+            return
+
+        new_magnitude = event.magnitude
+        new_depth = event.depth
+        new_x = event.x
+        new_y = event.y
+
+        if column == 1:
+            new_magnitude = value
+        elif column == 2:
+            new_depth = value
+        elif column == 3:
+            new_x = value
+        elif column == 4:
+            new_y = value
+
+        try:
+            self.system.correct_event(
+                event_id,
+                magnitude=new_magnitude,
+                depth=new_depth,
+                x=new_x,
+                y=new_y,
+                datetime_value=event.datetime,
+            )
+            self.statusBar().showMessage(
+                f"Event {event_id} corrected "
+                f"(revision {self.system.find_by_id(event_id).revision})",
+                5000,
+            )
+        except Exception as error:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(
+                self, "Could not correct event",
+                f"{type(error).__name__}: {error}"
+            )
+        finally:
+            self.update_views()
 
     def mark_reviewed(self):
         event_id = self._selected_id()
@@ -1675,24 +1599,41 @@ class MainWindow(QMainWindow):
         self.inorder_text.setPlainText("\n".join(lines))
 
     def _update_events_table(self):
-        events = self.system.avl.in_order()
-        self.events_table.setRowCount(len(events))
-        for row, event in enumerate(events):
-            values = [
-                event.event_id, f"{event.magnitude:.1f}",
-                f"{event.depth:.1f}", f"P{event.priority}",
-                event.revision, event.state,
-                "Populated" if event.in_populated_zone else "Not populated",
-                "Yes" if event.expensive_access else "No",
-            ]
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(str(value))
-                item.setForeground(QBrush(QColor("#172b4d")))
-                if column == 0:
-                    item.setData(Qt.ItemDataRole.UserRole, event.event_id)
-                if column == 7 and event.expensive_access:
-                    item.setForeground(QBrush(QColor("#c0392b")))
-                self.events_table.setItem(row, column, item)
+        self._populating_table = True
+        try:
+            events = self.system.avl.in_order()
+            self.events_table.setRowCount(len(events))
+            for row, event in enumerate(events):
+                values = [
+                    event.event_id,
+                    f"{event.magnitude:.1f}",
+                    f"{event.depth:.1f}",
+                    f"{event.x:.1f}",
+                    f"{event.y:.1f}",
+                    f"P{event.priority}",
+                    event.revision,
+                    event.state,
+                    "Populated" if event.in_populated_zone else "Not populated",
+                    "Yes" if event.expensive_access else "No",
+                ]
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(str(value))
+                    item.setForeground(QBrush(QColor("#172b4d")))
+
+                    if column == 0:
+                        item.setData(Qt.ItemDataRole.UserRole, event.event_id)
+
+                    if column in self._editable_columns:
+                        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+                    else:
+                        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+                    if column == 9 and event.expensive_access:
+                        item.setForeground(QBrush(QColor("#c0392b")))
+
+                    self.events_table.setItem(row, column, item)
+        finally:
+            self._populating_table = False
 
     def _update_reports_table(self):
         reports = list(self.system.report_queue)
@@ -2119,7 +2060,6 @@ class MainWindow(QMainWindow):
 
     def _update_event_buttons(self):
         has_selection = self._selected_id() is not None
-        self.correct_button.setEnabled(has_selection)
         self.review_button.setEnabled(has_selection)
         self.remove_button.setEnabled(has_selection)
 
@@ -2390,8 +2330,15 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "Invalid data", message)
 
 
+def _excepthook(exc_type, exc_value, exc_tb):
+    """Prints unhandled exceptions instead of letting Qt abort silently."""
+    import traceback
+    traceback.print_exception(exc_type, exc_value, exc_tb)
+
+
 def run_application():
     """Starts the desktop application."""
+    sys.excepthook = _excepthook
     app = QApplication.instance() or QApplication(sys.argv)
     window = MainWindow()
     window.show()
