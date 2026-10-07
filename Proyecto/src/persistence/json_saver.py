@@ -1,3 +1,4 @@
+# Módulo json saver: contiene la lógica relacionada con json saver.
 """JSON serialization for the complete SismoLab operational state."""
 
 import json
@@ -5,6 +6,7 @@ import os
 from pathlib import Path
 
 
+# Representa JsonSaver y agrupa sus datos y operaciones.
 class JsonSaver:
     """Exports a system without flattening the active AVL topology."""
 
@@ -12,6 +14,7 @@ class JsonSaver:
     SCHEMA_VERSION = 1
 
     @classmethod
+    # Gestiona save.
     def save(cls, system, path):
         """Writes a complete structural snapshot to a user-selected path."""
         destination = Path(path)
@@ -39,6 +42,7 @@ class JsonSaver:
         return destination
 
     @classmethod
+    # Gestiona to dict.
     def to_dict(cls, system):
         """Builds the JSON-compatible representation of a system."""
         tree = cls._serialize_tree(system.avl.root)
@@ -74,9 +78,11 @@ class JsonSaver:
         }
 
     @classmethod
+    # Gestiona serialize tree.
     def _serialize_tree(cls, root):
         nodes = []
 
+        # Gestiona visit.
         def visit(node):
             if node is None:
                 return
@@ -97,9 +103,11 @@ class JsonSaver:
         }
 
     @classmethod
+    # Gestiona preorder events.
     def _preorder_events(cls, root):
         events = []
 
+        # Gestiona visit.
         def visit(node):
             if node is None:
                 return

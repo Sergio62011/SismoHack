@@ -1,3 +1,4 @@
+# Módulo main: contiene la lógica relacionada con main.
 """
 SismoLab AVL - Demo and integration tests.
 
@@ -25,20 +26,24 @@ from services.seismic_system import SeismicSystem
 # UTILITIES
 # =========================================================
 
+# Gestiona title.
 def title(text):
     print("\n" + "=" * 65)
     print(text)
     print("=" * 65)
 
 
+# Gestiona subtitle.
 def subtitle(text):
     print("\n--- " + text + " ---")
 
 
+# Gestiona utc.
 def utc(y, mo, d, h=0, mi=0, s=0):
     return datetime(y, mo, d, h, mi, s, tzinfo=timezone.utc)
 
 
+# Gestiona ev.
 def ev(event_id, magnitude=5.0, depth=50.0,
        x=100.0, y=100.0, populated=False, hour=10):
     return Event(
@@ -52,6 +57,7 @@ def ev(event_id, magnitude=5.0, depth=50.0,
     )
 
 
+# Gestiona show event.
 def show_event(event):
     if event is None:
         print("  (no event)")
@@ -71,6 +77,7 @@ def show_event(event):
 # 1. MAP AND ZONES
 # =========================================================
 
+# Gestiona demo map and zones.
 def demo_map_and_zones():
     title("1. MAP AND ZONES (section 3)")
 
@@ -115,6 +122,7 @@ def demo_map_and_zones():
 # 2. PRIORITY AND KEY
 # =========================================================
 
+# Gestiona demo priority and key.
 def demo_priority_and_key():
     title("2. PRIORITY AND KEY (sections 4 and 5)")
 
@@ -162,6 +170,7 @@ def demo_priority_and_key():
 # 3. AVL: ROTATIONS
 # =========================================================
 
+# Gestiona demo rotations.
 def demo_rotations():
     title("3. AVL ROTATIONS (section 5)")
 
@@ -188,6 +197,7 @@ def demo_rotations():
 # 4. AVL: DELETION
 # =========================================================
 
+# Gestiona demo deletion.
 def demo_deletion():
     title("4. AVL DELETION (sections 6 and 10)")
 
@@ -223,6 +233,7 @@ def demo_deletion():
 # 5. STRESS MODE AND RECOVERY
 # =========================================================
 
+# Gestiona demo stress mode.
 def demo_stress_mode():
     title("5. STRESS MODE AND GLOBAL RECOVERY (section 8)")
 
@@ -262,6 +273,7 @@ def demo_stress_mode():
 # 6. BST VS AVL COMPARISON
 # =========================================================
 
+# Gestiona demo bst vs avl.
 def demo_bst_vs_avl():
     title("6. BST vs AVL COMPARISON (section 12)")
 
@@ -301,6 +313,7 @@ def demo_bst_vs_avl():
 # 7. SYSTEM: CREATE, QUERY, CORRECT, REMOVE
 # =========================================================
 
+# Gestiona demo system crud.
 def demo_system_crud():
     title("7. CRUD IN THE SYSTEM (section 6)")
 
@@ -351,6 +364,7 @@ def demo_system_crud():
 # 8. FIFO REPORT QUEUE
 # =========================================================
 
+# Gestiona print report result.
 def print_report_result(number, result):
     event = result["event"]
     eid = event.event_id if event is not None else "None"
@@ -364,6 +378,7 @@ def print_report_result(number, result):
         print(f"    Remaining pending: {result['remaining_pending']}")
 
 
+# Gestiona demo reports.
 def demo_reports():
     title("8. FIFO REPORT QUEUE (sections 6 and 8)")
 
@@ -402,6 +417,7 @@ def demo_reports():
 # 9. ARCHIVING AND REACTIVATION
 # =========================================================
 
+# Gestiona demo archive reactivation.
 def demo_archive_reactivation():
     title("9. ARCHIVING AND REACTIVATION (section 6)")
 
@@ -438,6 +454,7 @@ def demo_archive_reactivation():
 # 10. VALIDATIONS
 # =========================================================
 
+# Gestiona demo validations.
 def demo_validations():
     title("10. VALIDATIONS (sections 3 and 6)")
 

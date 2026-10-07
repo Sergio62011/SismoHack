@@ -1,11 +1,14 @@
+# Módulo audit: contiene la lógica relacionada con audit.
 from collections import deque
 
 from services.associations import _valid_events
 
 
+# Gestiona ordered keys.
 def _ordered_keys(root):
     result = []
 
+    # Gestiona traverse.
     def traverse(node):
         if node is None:
             return
@@ -17,8 +20,10 @@ def _ordered_keys(root):
     return result
 
 
+# Gestiona recalculated heights.
 def _recalculated_heights(root):
 
+    # Gestiona traverse.
     def traverse(node):
         if node is None:
             return -1, {}
@@ -36,6 +41,7 @@ def _recalculated_heights(root):
     return metadata
 
 
+# Gestiona verify structure.
 def verify_structure(system):
     errors = []
 
@@ -97,6 +103,7 @@ def verify_structure(system):
     # === 5. Heights and factors ===
     metadata = _recalculated_heights(system.avl.root)
 
+    # Gestiona check metadata.
     def check_metadata(node, depth):
         if node is None:
             return
@@ -171,6 +178,7 @@ def verify_structure(system):
                     )
 
     # === 7. Expensive access flags ===
+    # Gestiona check access.
     def check_access(node, depth):
         if node is None:
             return

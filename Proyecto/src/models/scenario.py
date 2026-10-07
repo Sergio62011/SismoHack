@@ -1,9 +1,12 @@
+# Módulo scenario: contiene la lógica relacionada con scenario.
 from datetime import datetime, timedelta, timezone
 
 
+# Representa Clock y agrupa sus datos y operaciones.
 class Clock:
     """Explicit simulation clock, in UTC, that only moves forward."""
 
+    # Define init.
     def __init__(self, initial_instant=None):
         if initial_instant is None:
             initial_instant = datetime(
@@ -15,41 +18,49 @@ class Clock:
 
     # === Operations ===
 
+    # Gestiona advance.
     def advance(self, seconds):
         if seconds <= 0:
             raise ValueError("Clock advance must be positive")
         self.instant += timedelta(seconds=seconds)
 
+    # Gestiona advance hours.
     def advance_hours(self, hours):
         self.advance(hours * 3600)
 
+    # Gestiona is not future.
     def is_not_future(self, datetime_value):
         if datetime_value.tzinfo is None:
             raise ValueError("The datetime must have a UTC timezone")
         return datetime_value <= self.instant
 
+    # Gestiona age in hours.
     def age_in_hours(self, datetime_value):
         if datetime_value.tzinfo is None:
             raise ValueError("The datetime must have a UTC timezone")
         delta = self.instant - datetime_value
         return delta.total_seconds() / 3600.0
 
+    # Gestiona jump to.
     def jump_to(self, datetime_value):
         if datetime_value.tzinfo is None:
             raise ValueError("The datetime must have a UTC timezone")
         self.instant = datetime_value.astimezone(timezone.utc)
 
+    # Gestiona copy.
     def copy(self):
         return Clock(self.instant)
 
     # === Persistence ===
 
+    # Gestiona to dict.
     def to_dict(self):
         return {
             "instant": self.instant.strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
 
     @classmethod
+    # Gestiona from dict.
     def from_dict(cls, data):
         if "instant" not in data:
             raise ValueError("The clock must have an 'instant' field")
@@ -58,32 +69,40 @@ class Clock:
         ).replace(tzinfo=timezone.utc)
         return cls(instant)
 
+    # Define repr.
     def __repr__(self):
         return f"Clock({self.instant.isoformat()})"
 
 
+# Representa Parameters y agrupa sus datos y operaciones.
 class Parameters:
     """Configurable scenario parameters: W, R, L, T."""
 
+    # Define init.
     def __init__(self, w=48.0, r=40.0, l=3, t=72.0):
         self.w = self._validate_positive("W", w)
         self.r = self._validate_positive("R", r)
         self.l = self._validate_non_negative_int("L", l)
         self.t = self._validate_positive("T", t)
 
+    # Gestiona set w.
     def set_w(self, value):
         self.w = self._validate_positive("W", value)
 
+    # Gestiona set r.
     def set_r(self, value):
         self.r = self._validate_positive("R", value)
 
+    # Gestiona set l.
     def set_l(self, value):
         self.l = self._validate_non_negative_int("L", value)
 
+    # Gestiona set t.
     def set_t(self, value):
         self.t = self._validate_positive("T", value)
 
     @staticmethod
+    # Gestiona validate positive.
     def _validate_positive(name, value):
         if isinstance(value, bool):
             raise ValueError(f"{name} must be a positive number")
@@ -98,6 +117,7 @@ class Parameters:
         return number
 
     @staticmethod
+    # Gestiona validate non negative int.
     def _validate_non_negative_int(name, value):
         if isinstance(value, bool):
             raise ValueError(f"{name} must be a non-negative integer")
@@ -113,26 +133,32 @@ class Parameters:
 
     # === Persistence and copy ===
 
+    # Gestiona to dict.
     def to_dict(self):
         return {"w": self.w, "r": self.r, "l": self.l, "t": self.t}
 
     @classmethod
+    # Gestiona from dict.
     def from_dict(cls, data):
         for field in ("w", "r", "l", "t"):
             if field not in data:
                 raise ValueError(f"Missing parameter '{field}'")
         return cls(w=data["w"], r=data["r"], l=data["l"], t=data["t"])
 
+    # Gestiona copy.
     def copy(self):
         return Parameters(self.w, self.r, self.l, self.t)
 
+    # Define repr.
     def __repr__(self):
         return f"Parameters(W={self.w}, R={self.r}, L={self.l}, T={self.t})"
 
 
+# Representa Scenario y agrupa sus datos y operaciones.
 class Scenario:
     """Scenario state: clock, parameters, map and stations."""
 
+    # Define init.
     def __init__(
         self,
         map_obj,
@@ -151,6 +177,7 @@ class Scenario:
 
     # === Persistence and copy ===
 
+    # Gestiona to dict.
     def to_dict(self):
         return {
             "clock": self.clock.to_dict(),
@@ -163,6 +190,7 @@ class Scenario:
         }
 
     @classmethod
+    # Gestiona from dict.
     def from_dict(cls, data):
         from models.map import SeismicMap
         from models.station import Station
@@ -186,6 +214,7 @@ class Scenario:
             stations=stations,
         )
 
+    # Gestiona copy.
     def copy(self):
         stations = {
             station_id: station.copy()
@@ -199,5 +228,6 @@ class Scenario:
             stations=stations,
         )
 
+    # Define repr.
     def __repr__(self):
         return f"Scenario({self.clock}, {self.parameters})"

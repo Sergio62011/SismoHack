@@ -1,3 +1,4 @@
+# Módulo json loader: contiene la lógica relacionada con json loader.
 """Strict JSON loaders for SismoLab structural and insertion modes."""
 
 import json
@@ -13,10 +14,12 @@ from structure.bst import BST
 from structure.node import Node
 
 
+# Representa JsonPersistenceError y agrupa sus datos y operaciones.
 class JsonPersistenceError(ValueError):
     """Raised when a JSON file cannot safely become a system state."""
 
 
+# Representa JsonLoader y agrupa sus datos y operaciones.
 class JsonLoader:
     """Loads JSON only after every required invariant has been verified."""
 
@@ -43,6 +46,7 @@ class JsonLoader:
     }
 
     @classmethod
+    # Gestiona load topology.
     def load_topology(cls, path, current_system=None):
         """Restores the stored AVL links exactly as they appear in JSON.
 
@@ -102,6 +106,7 @@ class JsonLoader:
             raise
 
     @classmethod
+    # Gestiona load by insertions.
     def load_by_insertions(cls, path):
         """Creates an AVL and a plain BST with the same event sequence.
 
@@ -144,6 +149,7 @@ class JsonLoader:
         return system, bst
 
     @classmethod
+    # Gestiona read file.
     def _read_file(cls, path):
         file = Path(path)
         if not file.is_file():
@@ -168,6 +174,7 @@ class JsonLoader:
         return data
 
     @classmethod
+    # Gestiona validate header.
     def _validate_header(cls, data):
         if data.get("format") != cls.FORMAT:
             raise JsonPersistenceError(
@@ -179,6 +186,7 @@ class JsonLoader:
             )
 
     @classmethod
+    # Gestiona load scenario.
     def _load_scenario(cls, data):
         scenario_data = data.get("scenario")
         if not isinstance(scenario_data, dict):
@@ -191,6 +199,7 @@ class JsonLoader:
             ) from error
 
     @classmethod
+    # Gestiona load execution.
     def _load_execution(cls, execution_data):
         if not isinstance(execution_data, dict):
             raise JsonPersistenceError("Missing 'execution' object")
@@ -261,6 +270,7 @@ class JsonLoader:
     # === Topology ===
 
     @classmethod
+    # Gestiona build topological tree.
     def _build_topological_tree(cls, tree_data, scenario, stress_mode):
         if not isinstance(tree_data, dict):
             raise JsonPersistenceError("Missing 'active_tree' object")
@@ -353,6 +363,7 @@ class JsonLoader:
 
         visited = set()
 
+        # Gestiona traverse.
         def traverse(node):
             eid = node.event.event_id
             if eid in visited:
@@ -379,7 +390,9 @@ class JsonLoader:
         return tree, active
 
     @classmethod
+    # Gestiona validate bst and metadata.
     def _validate_bst_and_metadata(cls, root, links, stress_mode):
+        # Gestiona traverse.
         def traverse(node, lower, upper):
             key = node.event.calculate_key()
             if lower is not None and key <= lower:
@@ -417,6 +430,7 @@ class JsonLoader:
         traverse(root, None, None)
 
     @classmethod
+    # Gestiona load historical.
     def _load_historical(cls, historical_data, scenario, active_ids):
         if not isinstance(historical_data, list):
             raise JsonPersistenceError(
@@ -436,6 +450,7 @@ class JsonLoader:
         return historical
 
     @classmethod
+    # Gestiona load removed.
     def _load_removed(cls, removed_data, active_ids, historical_ids):
         if not isinstance(removed_data, list):
             raise JsonPersistenceError("'removed_ids' must be a list")
@@ -456,6 +471,7 @@ class JsonLoader:
         return removed
 
     @classmethod
+    # Gestiona create event.
     def _create_event(cls, data, scenario, location, context):
         if not isinstance(data, dict):
             raise JsonPersistenceError(f"{context} must be an object")
@@ -536,6 +552,7 @@ class JsonLoader:
     # =========================================================
 
     @classmethod
+    # Gestiona load queue.
     def _load_queue(cls, queue_data, scenario):
         if not isinstance(queue_data, list):
             raise JsonPersistenceError("'report_queue' must be a list")
@@ -547,6 +564,7 @@ class JsonLoader:
         return queue
 
     @classmethod
+    # Gestiona load last report.
     def _load_last_report(cls, report_data, scenario):
         if report_data is None:
             return None
@@ -555,6 +573,7 @@ class JsonLoader:
         )
 
     @classmethod
+    # Gestiona create report.
     def _create_report(cls, data, scenario, context):
         if not isinstance(data, dict):
             raise JsonPersistenceError(f"{context} must be an object")
@@ -587,6 +606,7 @@ class JsonLoader:
     # =========================================================
 
     @classmethod
+    # Gestiona validate associations.
     def _validate_associations(cls, events, removed_ids=None):
         removed_ids = removed_ids or set()
 
@@ -635,6 +655,7 @@ class JsonLoader:
                 current = events[current.reference]
 
     @classmethod
+    # Gestiona validate last report out of queue.
     def _validate_last_report_out_of_queue(cls, last_report, queue):
         if last_report is None:
             return
@@ -650,7 +671,9 @@ class JsonLoader:
                 )
 
     @classmethod
+    # Gestiona validate expensive access.
     def _validate_expensive_access(cls, root, limit_l):
+        # Gestiona traverse.
         def traverse(node, depth):
             if node is None:
                 return
@@ -674,6 +697,7 @@ class JsonLoader:
     # =========================================================
 
     @classmethod
+    # Gestiona validate id reference.
     def _validate_id_reference(cls, value, nodes, context):
         if (isinstance(value, bool)
                 or not isinstance(value, int)
@@ -683,6 +707,7 @@ class JsonLoader:
             )
 
     @classmethod
+    # Gestiona validate integer id.
     def _validate_integer_id(cls, value, context):
         try:
             return SeismicSystem._validate_id(value)
@@ -692,6 +717,7 @@ class JsonLoader:
             ) from error
 
     @staticmethod
+    # Gestiona require fields.
     def _require_fields(data, required, context):
         missing = sorted(required - set(data))
         if missing:

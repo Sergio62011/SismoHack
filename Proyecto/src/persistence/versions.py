@@ -1,3 +1,4 @@
+# Módulo versions: contiene la lógica relacionada con versions.
 """Named persistent versions backed by structural SismoLab JSON files.
 
 Extracts the 'state' field from the version file before passing it to
@@ -16,10 +17,12 @@ from persistence.json_loader import JsonPersistenceError, JsonLoader
 from persistence.json_saver import JsonSaver
 
 
+# Representa PersistentVersionsError y agrupa sus datos y operaciones.
 class PersistentVersionsError(ValueError):
     """Raised when the version catalog cannot be safely used."""
 
 
+# Representa VersionManager y agrupa sus datos y operaciones.
 class VersionManager:
     """Stores independently restorable, named operational snapshots."""
 
@@ -27,6 +30,7 @@ class VersionManager:
     FORMAT = "SismoLab-Versions"
     SCHEMA_VERSION = 1
 
+    # Define init.
     def __init__(self, directory=None):
         if directory is None:
             directory = Path(__file__).resolve().parents[2] / "versions"
@@ -37,6 +41,7 @@ class VersionManager:
     # Public API
     # =========================================================
 
+    # Gestiona save.
     def save(self, name, system):
         """Saves a named version and records it in the persistent catalog."""
         name = self._validate_name(name)
@@ -95,10 +100,12 @@ class VersionManager:
 
         return dict(entry)
 
+    # Gestiona list.
     def list(self):
         """Returns catalog entries ordered from newest to oldest."""
         return [dict(version) for version in reversed(self._read_manifest())]
 
+    # Gestiona restore.
     def restore(self, name, current_system=None):
         """Loads a named version.
 
@@ -144,6 +151,7 @@ class VersionManager:
             if tmp_path is not None:
                 Path(tmp_path).unlink(missing_ok=True)
 
+    # Gestiona delete.
     def delete(self, name):
         """Removes a named version from the catalog and its snapshot file."""
         version = self._find(name)
@@ -166,6 +174,7 @@ class VersionManager:
     # Internal
     # =========================================================
 
+    # Gestiona find.
     def _find(self, name):
         name = self._validate_name(name)
         for version in self._read_manifest():
@@ -175,6 +184,7 @@ class VersionManager:
             f"No version named '{name}' exists"
         )
 
+    # Gestiona read manifest.
     def _read_manifest(self):
         path = self.directory / self.MANIFEST_FILE
         if not path.exists():
@@ -222,6 +232,7 @@ class VersionManager:
             versions.append(dict(version))
         return versions
 
+    # Gestiona write manifest.
     def _write_manifest(self, versions):
         self.directory.mkdir(parents=True, exist_ok=True)
         destination = self.directory / self.MANIFEST_FILE
@@ -243,6 +254,7 @@ class VersionManager:
                 f"Could not update the version catalog: {error}"
             ) from error
 
+    # Gestiona safe path.
     def _safe_path(self, filename):
         if not isinstance(filename, str) or not filename.endswith(".json"):
             raise PersistentVersionsError(
@@ -256,6 +268,7 @@ class VersionManager:
         return path
 
     @staticmethod
+    # Gestiona validate name.
     def _validate_name(name):
         if not isinstance(name, str):
             raise PersistentVersionsError(
@@ -269,11 +282,13 @@ class VersionManager:
         return name
 
     @staticmethod
+    # Gestiona filename.
     def _filename(name):
         identifier = hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
         return f"version-{identifier}.json"
 
     @staticmethod
+    # Gestiona validate metadata.
     def _validate_metadata(version, index):
         for field in ("active_events", "historical_events"):
             value = version[field]

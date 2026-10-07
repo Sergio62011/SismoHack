@@ -1,8 +1,11 @@
+# Módulo bst: contiene la lógica relacionada con bst.
 from .node import Node
 
 
+# Representa BST y agrupa sus datos y operaciones.
 class BST:
 
+    # Define init.
     def __init__(self):
         self.root = None
 
@@ -10,12 +13,14 @@ class BST:
     # INSERT
     # =========================
 
+    # Gestiona insert.
     def insert(self, event):
         if self.root is None:
             self.root = Node(event)
             return
         self._insert(self.root, event)
 
+    # Gestiona insert.
     def _insert(self, node, event):
         if event < node.event:
             if node.left is None:
@@ -38,9 +43,11 @@ class BST:
     # SEARCH
     # =========================
 
+    # Gestiona search.
     def search(self, key):
         return self._search(self.root, key)
 
+    # Gestiona search.
     def _search(self, node, key):
         if node is None:
             return None
@@ -55,39 +62,46 @@ class BST:
     # TRAVERSALS
     # =========================
 
+    # Gestiona pre order.
     def pre_order(self):
         result = []
         self._pre_order(self.root, result)
         return result
 
+    # Gestiona pre order.
     def _pre_order(self, node, result):
         if node is not None:
             result.append(node.event)
             self._pre_order(node.left, result)
             self._pre_order(node.right, result)
 
+    # Gestiona in order.
     def in_order(self):
         result = []
         self._in_order(self.root, result)
         return result
 
+    # Gestiona in order.
     def _in_order(self, node, result):
         if node is not None:
             self._in_order(node.left, result)
             result.append(node.event)
             self._in_order(node.right, result)
 
+    # Gestiona post order.
     def post_order(self):
         result = []
         self._post_order(self.root, result)
         return result
 
+    # Gestiona post order.
     def _post_order(self, node, result):
         if node is not None:
             self._post_order(node.left, result)
             self._post_order(node.right, result)
             result.append(node.event)
 
+    # Gestiona breadth first.
     def breadth_first(self):
         if self.root is None:
             return []
@@ -109,9 +123,11 @@ class BST:
     # HEIGHT
     # =========================
 
+    # Gestiona height.
     def height(self):
         return self._height(self.root)
 
+    # Gestiona height.
     def _height(self, node):
         if node is None:
             return -1
@@ -121,9 +137,11 @@ class BST:
     # UPDATE HEIGHTS
     # =========================
 
+    # Gestiona update heights.
     def update_heights(self):
         self._update_heights(self.root)
 
+    # Gestiona update heights.
     def _update_heights(self, node):
         if node is None:
             return -1
@@ -136,9 +154,11 @@ class BST:
     # SIZE
     # =========================
 
+    # Gestiona size.
     def size(self):
         return self._size(self.root)
 
+    # Gestiona size.
     def _size(self, node):
         if node is None:
             return 0
@@ -148,9 +168,11 @@ class BST:
     # LEAVES
     # =========================
 
+    # Gestiona number of leaves.
     def number_of_leaves(self):
         return self._number_of_leaves(self.root)
 
+    # Gestiona number of leaves.
     def _number_of_leaves(self, node):
         if node is None:
             return 0
@@ -165,9 +187,11 @@ class BST:
     # NODE LEVEL
     # =========================
 
+    # Gestiona node level.
     def node_level(self, key):
         return self._node_level(self.root, key, 0)
 
+    # Gestiona node level.
     def _node_level(self, node, key, level):
         if node is None:
             return -1
@@ -181,11 +205,13 @@ class BST:
     # NODES PER LEVEL
     # =========================
 
+    # Gestiona nodes per level.
     def nodes_per_level(self):
         result = {}
         self._nodes_per_level(self.root, 0, result)
         return result
 
+    # Gestiona nodes per level.
     def _nodes_per_level(self, node, level, result):
         if node is None:
             return
@@ -197,11 +223,13 @@ class BST:
     # ROOT-TO-LEAF PATHS
     # =========================
 
+    # Gestiona root to leaf paths.
     def root_to_leaf_paths(self):
         result = []
         self._root_to_leaf_paths(self.root, [], result)
         return result
 
+    # Gestiona root to leaf paths.
     def _root_to_leaf_paths(self, node, path, result):
         if node is None:
             return
@@ -217,6 +245,7 @@ class BST:
     # BALANCE FACTOR
     # =========================
 
+    # Gestiona balance factor.
     def balance_factor(self, node):
         if node is None:
             return 0
@@ -228,12 +257,14 @@ class BST:
     # MIN / MAX
     # =========================
 
+    # Gestiona find minimum.
     def find_minimum(self, node):
         current = node
         while current is not None and current.left is not None:
             current = current.left
         return current
 
+    # Gestiona find maximum.
     def find_maximum(self, node):
         current = node
         while current is not None and current.right is not None:
@@ -244,11 +275,13 @@ class BST:
     # DELETE
     # =========================
 
+    # Gestiona delete.
     def delete(self, key):
         self.root = self._delete(self.root, key)
         if self.root is not None:
             self.root.parent = None
 
+    # Gestiona delete.
     def _delete(self, node, key):
         if node is None:
             return None
@@ -287,6 +320,7 @@ class BST:
     # DEBUG DRAW
     # =========================
 
+    # Gestiona draw.
     def draw(self):
         if self.root is None:
             print("The tree is empty")
@@ -295,6 +329,7 @@ class BST:
             print("-----------")
             self._draw(self.root, "", "R")
 
+    # Gestiona draw.
     def _draw(self, node, space, position):
         if node is not None:
             self._draw(node.right, space + "     ", "R")

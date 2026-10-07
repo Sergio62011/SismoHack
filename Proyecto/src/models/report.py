@@ -1,9 +1,12 @@
+# Módulo report: contiene la lógica relacionada con report.
 from datetime import datetime, timezone
 
 
+# Representa Report y agrupa sus datos y operaciones.
 class Report:
     """Incoming station report before the system decides what to do with it."""
 
+    # Define init.
     def __init__(
         self,
         event_id: int,
@@ -26,6 +29,7 @@ class Report:
 
     # === Persistence and copy ===
 
+    # Gestiona to dict.
     def to_dict(self):
         return {
             "event_id": self.event_id,
@@ -39,6 +43,7 @@ class Report:
         }
 
     @classmethod
+    # Gestiona from dict.
     def from_dict(cls, data):
         dt = datetime.strptime(
             data["datetime"], "%Y-%m-%dT%H:%M:%SZ"
@@ -54,12 +59,14 @@ class Report:
             station=data["station"],
         )
 
+    # Gestiona copy.
     def copy(self):
         return Report(
             self.event_id, self.magnitude, self.depth,
             self.x, self.y, self.datetime, self.revision, self.station,
         )
 
+    # Define repr.
     def __repr__(self):
         return (
             f"Report(id={self.event_id}, M={self.magnitude}, "

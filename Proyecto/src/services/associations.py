@@ -1,7 +1,9 @@
+# Módulo associations: contiene la lógica relacionada con associations.
 from datetime import timedelta
 from math import hypot
 
 
+# Gestiona valid events.
 def _valid_events(system):
     events = {}
 
@@ -15,6 +17,7 @@ def _valid_events(system):
     return list(events.values())
 
 
+# Gestiona distance.
 def _distance(event_a, event_b):
     return hypot(
         event_a.x - event_b.x,
@@ -22,6 +25,7 @@ def _distance(event_a, event_b):
     )
 
 
+# Gestiona is candidate.
 def is_candidate(event_a, event_b, w_hours, r_km):
     if w_hours < 0 or r_km < 0:
         return False
@@ -48,6 +52,7 @@ def is_candidate(event_a, event_b, w_hours, r_km):
     return True
 
 
+# Gestiona get candidates.
 def get_candidates(system, event):
     w_hours = system.parameters.w
     r_km = system.parameters.r
@@ -64,10 +69,12 @@ def get_candidates(system, event):
     return candidates
 
 
+# Gestiona choose reference.
 def choose_reference(event, candidates):
     if not candidates:
         return None
 
+    # Gestiona criterion.
     def criterion(candidate):
         difference = (
             event.datetime - candidate.datetime
@@ -85,6 +92,7 @@ def choose_reference(event, candidates):
     return min(candidates, key=criterion)
 
 
+# Gestiona recalculate all.
 def recalculate_all(system):
     events = _valid_events(system)
 
@@ -103,5 +111,6 @@ def recalculate_all(system):
             reference.referenced_by.add(event.event_id)
 
 
+# Gestiona update associations of.
 def update_associations_of(system, event_id=None):
     recalculate_all(system)

@@ -1,3 +1,5 @@
+# Gestiona first k pending.
+# Módulo queries: contiene la lógica relacionada con queries.
 def first_k_pending(system, k):
     if isinstance(k, bool) or not isinstance(k, int) or k <= 0:
         raise ValueError("k must be a positive integer")
@@ -5,6 +7,7 @@ def first_k_pending(system, k):
     events = []
     nodes_examined = 0
 
+    # Gestiona traverse.
     def traverse(node):
         nonlocal nodes_examined
 
@@ -31,6 +34,7 @@ def first_k_pending(system, k):
     }
 
 
+# Gestiona events by magnitude.
 def events_by_magnitude(system, magnitude_min, magnitude_max):
     if magnitude_min > magnitude_max:
         raise ValueError(
@@ -40,6 +44,7 @@ def events_by_magnitude(system, magnitude_min, magnitude_max):
     events = []
     nodes_examined = 0
 
+    # Gestiona traverse.
     def traverse(node):
         nonlocal nodes_examined
 
@@ -65,6 +70,7 @@ def events_by_magnitude(system, magnitude_min, magnitude_max):
     }
 
 
+# Gestiona events by depth and date.
 def events_by_depth_and_date(
     system,
     max_depth,
@@ -79,6 +85,7 @@ def events_by_depth_and_date(
     events = []
     nodes_examined = 0
 
+    # Gestiona traverse.
     def traverse(node):
         nonlocal nodes_examined
 
@@ -107,6 +114,7 @@ def events_by_depth_and_date(
     }
 
 
+# Gestiona event associations.
 def event_associations(system, event_id):
     eid = system._validate_id(event_id)
 
@@ -182,6 +190,7 @@ def event_associations(system, event_id):
     }
 
 
+# Gestiona avl metrics.
 def avl_metrics(system):
     return {
         "count": system.avl.size(),

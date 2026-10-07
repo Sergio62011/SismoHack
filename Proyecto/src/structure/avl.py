@@ -1,7 +1,9 @@
+# Módulo avl: contiene la lógica relacionada con avl.
 # structure/avl.py
 from .node import Node
 
 
+# Representa AVL y agrupa sus datos y operaciones.
 class AVL:
     """
     AVL ordered by key K = (priority, magnitude, id).
@@ -11,6 +13,7 @@ class AVL:
     keeps every insertion O(log n) instead of O(n).
     """
 
+    # Define init.
     def __init__(self):
         self.root = None
         self.stress_mode = False
@@ -29,6 +32,7 @@ class AVL:
     # INSERT
     # =========================================================
 
+    # Gestiona insert.
     def insert(self, event):
         self.rotations_last_operation = []
 
@@ -40,6 +44,7 @@ class AVL:
         self.root = self._insert(self.root, event)
         self.root.parent = None
 
+    # Gestiona insert.
     def _insert(self, node, event):
         if node is None:
             return Node(event)
@@ -70,6 +75,7 @@ class AVL:
     # BALANCE
     # =========================================================
 
+    # Gestiona balance.
     def _balance(self, node):
         bf = node.balance_factor
 
@@ -111,6 +117,7 @@ class AVL:
     # ROTATIONS
     # =========================================================
 
+    # Gestiona rotate right.
     def _rotate_right(self, z):
         y = z.left
         if y is None:
@@ -132,6 +139,7 @@ class AVL:
         self.rotations_performed += 1
         return y
 
+    # Gestiona rotate left.
     def _rotate_left(self, z):
         y = z.right
         if y is None:
@@ -157,9 +165,11 @@ class AVL:
     # SEARCH BY KEY
     # =========================================================
 
+    # Gestiona search.
     def search(self, key):
         return self._search(self.root, key)
 
+    # Gestiona search.
     def _search(self, node, key):
         if node is None:
             return None
@@ -176,39 +186,46 @@ class AVL:
     # TRAVERSALS
     # =========================================================
 
+    # Gestiona pre order.
     def pre_order(self):
         result = []
         self._pre_order(self.root, result)
         return result
 
+    # Gestiona pre order.
     def _pre_order(self, node, result):
         if node is not None:
             result.append(node.event)
             self._pre_order(node.left, result)
             self._pre_order(node.right, result)
 
+    # Gestiona in order.
     def in_order(self):
         result = []
         self._in_order(self.root, result)
         return result
 
+    # Gestiona in order.
     def _in_order(self, node, result):
         if node is not None:
             self._in_order(node.left, result)
             result.append(node.event)
             self._in_order(node.right, result)
 
+    # Gestiona post order.
     def post_order(self):
         result = []
         self._post_order(self.root, result)
         return result
 
+    # Gestiona post order.
     def _post_order(self, node, result):
         if node is not None:
             self._post_order(node.left, result)
             self._post_order(node.right, result)
             result.append(node.event)
 
+    # Gestiona breadth first.
     def breadth_first(self):
         if self.root is None:
             return []
@@ -226,12 +243,14 @@ class AVL:
 
         return result
 
+    # Gestiona reverse in order.
     def reverse_in_order(self):
         """Descending order by key."""
         result = []
         self._reverse_in_order(self.root, result)
         return result
 
+    # Gestiona reverse in order.
     def _reverse_in_order(self, node, result):
         if node is not None:
             self._reverse_in_order(node.right, result)
@@ -242,20 +261,25 @@ class AVL:
     # METRICS
     # =========================================================
 
+    # Gestiona height.
     def height(self):
         return self.root.height if self.root else -1
 
+    # Gestiona size.
     def size(self):
         return self._size(self.root)
 
+    # Gestiona size.
     def _size(self, node):
         if node is None:
             return 0
         return 1 + self._size(node.left) + self._size(node.right)
 
+    # Gestiona number of leaves.
     def number_of_leaves(self):
         return self._number_of_leaves(self.root)
 
+    # Gestiona number of leaves.
     def _number_of_leaves(self, node):
         if node is None:
             return 0
@@ -266,10 +290,12 @@ class AVL:
             + self._number_of_leaves(node.right)
         )
 
+    # Gestiona node depth.
     def node_depth(self, key):
         """Depth of a node by key (root = 0). Returns -1 if absent."""
         return self._node_depth(self.root, key, 0)
 
+    # Gestiona node depth.
     def _node_depth(self, node, key, depth):
         if node is None:
             return -1
@@ -281,11 +307,13 @@ class AVL:
             return self._node_depth(node.left, key, depth + 1)
         return self._node_depth(node.right, key, depth + 1)
 
+    # Gestiona nodes per level.
     def nodes_per_level(self):
         result = {}
         self._nodes_per_level(self.root, 0, result)
         return result
 
+    # Gestiona nodes per level.
     def _nodes_per_level(self, node, level, result):
         if node is None:
             return
@@ -293,9 +321,11 @@ class AVL:
         self._nodes_per_level(node.left, level + 1, result)
         self._nodes_per_level(node.right, level + 1, result)
 
+    # Gestiona update heights.
     def update_heights(self):
         self._update_heights(self.root)
 
+    # Gestiona update heights.
     def _update_heights(self, node):
         if node is None:
             return -1
@@ -308,12 +338,14 @@ class AVL:
     # MIN / MAX
     # =========================================================
 
+    # Gestiona find minimum.
     def find_minimum(self, node):
         current = node
         while current is not None and current.left is not None:
             current = current.left
         return current
 
+    # Gestiona find maximum.
     def find_maximum(self, node):
         current = node
         while current is not None and current.right is not None:
@@ -324,12 +356,14 @@ class AVL:
     # DELETE
     # =========================================================
 
+    # Gestiona delete.
     def delete(self, key):
         self.rotations_last_operation = []
         self.root = self._delete(self.root, key)
         if self.root is not None:
             self.root.parent = None
 
+    # Gestiona delete.
     def _delete(self, node, key):
         if node is None:
             return None
@@ -381,9 +415,11 @@ class AVL:
     # STRESS MODE
     # =========================================================
 
+    # Gestiona enable stress mode.
     def enable_stress_mode(self):
         self.stress_mode = True
 
+    # Gestiona disable stress mode.
     def disable_stress_mode(self):
         self.stress_mode = False
 
@@ -391,6 +427,7 @@ class AVL:
     # GLOBAL RECOVERY
     # =========================================================
 
+    # Gestiona recover balance.
     def recover_balance(self):
         self.rotations_last_operation = []
         self.recovery_passes = 0
@@ -412,6 +449,7 @@ class AVL:
 
         self.stress_mode = False
 
+    # Gestiona recover pass.
     def _recover_pass(self, node):
         if node is None:
             return None
@@ -436,6 +474,7 @@ class AVL:
 
         return node
 
+    # Gestiona is avl.
     def _is_avl(self, node):
         if node is None:
             return True
@@ -443,6 +482,7 @@ class AVL:
             return False
         return self._is_avl(node.left) and self._is_avl(node.right)
 
+    # Gestiona copy.
     def copy(self):
         new = AVL()
         new.stress_mode = self.stress_mode
@@ -460,6 +500,7 @@ class AVL:
 
         return new
 
+    # Gestiona draw.
     def draw(self, show_info=False):
         if self.root is None:
             print("The tree is empty")
@@ -470,6 +511,7 @@ class AVL:
         print("-----------")
         self._draw(self.root, "", "R", show_info)
 
+    # Gestiona draw.
     def _draw(self, node, space, position, show_info):
         if node is not None:
             self._draw(node.right, space + "     ", "R", show_info)

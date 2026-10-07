@@ -1,3 +1,4 @@
+# Módulo main window: contiene la lógica relacionada con main window.
 from pathlib import Path
 import sys
 from datetime import datetime, timezone
@@ -56,8 +57,10 @@ from structure.bst import BST
 from services.audit import verify_structure
 
 
+# Representa TreeViewWithZoom y agrupa sus datos y operaciones.
 class TreeViewWithZoom(QGraphicsView):
 
+    # Define init.
     def __init__(self, scene, parent=None):
         super().__init__(scene, parent)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -77,6 +80,7 @@ class TreeViewWithZoom(QGraphicsView):
             "QGraphicsView { background: #fafbfc; border: 1px solid #d8e0e8; }"
         )
 
+    # Gestiona wheelEvent.
     def wheelEvent(self, event):
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             factor = 1.2 if event.angleDelta().y() > 0 else 1 / 1.2
@@ -86,9 +90,11 @@ class TreeViewWithZoom(QGraphicsView):
             super().wheelEvent(event)
 
 
+# Representa MainWindow y agrupa sus datos y operaciones.
 class MainWindow(QMainWindow):
     """Desktop view that uses the existing SismoLab service."""
 
+    # Define init.
     def __init__(self):
         super().__init__()
         self.system = SeismicSystem()
@@ -103,21 +109,25 @@ class MainWindow(QMainWindow):
         self._create_processing_timer()
         self.update_views()
 
+    # Gestiona create clock timer.
     def _create_clock_timer(self):
         self.clock_timer = QTimer(self)
         self.clock_timer.setInterval(1000)
         self.clock_timer.timeout.connect(self._clock_tick)
         self.clock_timer.start()
 
+    # Gestiona clock tick.
     def _clock_tick(self):
         self.system.clock.advance(1)
         self._update_clock()
 
+    # Gestiona create processing timer.
     def _create_processing_timer(self):
         self.processing_timer = QTimer(self)
         self.processing_timer.setInterval(800)
         self.processing_timer.timeout.connect(self._process_one_step)
 
+    # Gestiona process one step.
     def _process_one_step(self):
         if not self.system.has_pending_reports():
             self.processing_timer.stop()
@@ -128,6 +138,7 @@ class MainWindow(QMainWindow):
         self._show_results([result])
         self.update_views()
 
+    # Gestiona jump clock.
     def jump_clock(self):
         text = self.jump_field.dateTime().toString(
             "yyyy-MM-dd HH:mm:ss"
@@ -145,6 +156,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona build window.
     def _build_window(self):
         self.setWindowTitle("SismoLab AVL")
         self.resize(1220, 780)
@@ -200,6 +212,7 @@ class MainWindow(QMainWindow):
             "QTabBar::tab { padding: 8px 14px; }"
         )
 
+    # Gestiona build header.
     def _build_header(self):
         container = QFrame()
         layout = QHBoxLayout(container)
@@ -296,6 +309,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.clock_label)
         return container
 
+    # Gestiona build summary.
     def _build_summary(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -378,6 +392,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(order_group)
         return page
 
+    # Gestiona build events.
     def _build_events(self):
         page = QWidget()
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -435,6 +450,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
         return page
 
+    # Gestiona build reports.
     def _build_reports(self):
         page = QWidget()
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -479,6 +495,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
         return page
 
+    # Gestiona build map.
     def _build_map(self):
         page = QWidget()
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -523,6 +540,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
         return page
 
+    # Gestiona build comparison.
     def _build_comparison(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -599,6 +617,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(trees, 1)
         return page
 
+    # Gestiona build history.
     def _build_history(self):
         page = QWidget()
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -659,6 +678,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
         return page
 
+    # Gestiona build queries.
     def _build_queries(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -790,6 +810,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(queries, 1)
         return page
 
+    # Gestiona apply parameters.
     def apply_parameters(self):
         try:
             changed = self.system.update_parameters(
@@ -808,6 +829,7 @@ class MainWindow(QMainWindow):
             self._show_error(str(error))
 
     @staticmethod
+    # Gestiona events text.
     def _events_text(events):
         if not events:
             return "No results."
@@ -818,6 +840,7 @@ class MainWindow(QMainWindow):
             for event in events
         )
 
+    # Gestiona query first k.
     def query_first_k(self):
         try:
             result = first_k_pending(
@@ -830,6 +853,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona query magnitude.
     def query_magnitude(self):
         try:
             result = events_by_magnitude(
@@ -844,6 +868,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona query depth date.
     def query_depth_date(self):
         try:
             start = self._read_date(self.start_date_query)
@@ -861,6 +886,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona query associations.
     def query_associations(self):
         try:
             result = event_associations(
@@ -911,6 +937,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona build versions.
     def _build_versions(self):
         page = QWidget()
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -969,6 +996,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
         return page
 
+    # Gestiona build audit.
     def _build_audit(self):
         content = QWidget()
         layout = QVBoxLayout(content)
@@ -1097,6 +1125,7 @@ class MainWindow(QMainWindow):
         )
         return scroll
 
+    # Gestiona verify structure.
     def verify_structure(self):
         report = verify_structure(self.system)
 
@@ -1122,6 +1151,7 @@ class MainWindow(QMainWindow):
 
         self._paint_indicators(report["indicators"])
 
+    # Gestiona paint indicators.
     def _paint_indicators(self, ind):
         values = {
             "active": ind["active"],
@@ -1161,10 +1191,12 @@ class MainWindow(QMainWindow):
             f"Nodes per level: {ind['nodes_per_level']}"
         )
 
+    # Gestiona update audit.
     def _update_audit(self):
         report = verify_structure(self.system)
         self._paint_indicators(report["indicators"])
 
+    # Gestiona build form.
     def _build_form(self, layout, include_revision=False):
         form = QFormLayout()
         fields = {
@@ -1200,6 +1232,7 @@ class MainWindow(QMainWindow):
         return fields
 
     @staticmethod
+    # Gestiona decimal field.
     def _decimal_field(minimum, maximum):
         field = QDoubleSpinBox()
         field.setRange(minimum, maximum)
@@ -1208,6 +1241,7 @@ class MainWindow(QMainWindow):
         return field
 
     @staticmethod
+    # Gestiona build table.
     def _build_table(headers):
         table = QTableWidget(0, len(headers))
         table.setHorizontalHeaderLabels(headers)
@@ -1222,6 +1256,7 @@ class MainWindow(QMainWindow):
         )
         return table
 
+    # Gestiona qdatetime from clock.
     def _qdatetime_from_clock(self):
         return QDateTime.fromString(
             self.system.clock.instant.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1229,12 +1264,14 @@ class MainWindow(QMainWindow):
         )
 
     @staticmethod
+    # Gestiona read date.
     def _read_date(field):
         text = field.dateTime().toString("yyyy-MM-dd HH:mm:ss")
         return datetime.strptime(
             text, "%Y-%m-%d %H:%M:%S"
         ).replace(tzinfo=timezone.utc)
 
+    # Gestiona read data.
     def _read_data(self, fields):
         return {
             "event_id": fields["id"].value(),
@@ -1246,6 +1283,7 @@ class MainWindow(QMainWindow):
             "station": fields["station"].text().strip(),
         }
 
+    # Gestiona create event.
     def create_event(self):
         try:
             data = self._read_data(self.event_fields)
@@ -1265,6 +1303,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona on event cell changed.
     def _on_event_cell_changed(self, item):
         """Called when the user edits a cell in the events table."""
         if self._populating_table:
@@ -1332,6 +1371,7 @@ class MainWindow(QMainWindow):
         finally:
             self.update_views()
 
+    # Gestiona mark reviewed.
     def mark_reviewed(self):
         event_id = self._selected_id()
         if event_id is None:
@@ -1345,6 +1385,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona undo.
     def undo(self):
         if self.processing_timer.isActive():
             self.processing_timer.stop()
@@ -1361,6 +1402,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Undone: {description}", 4000)
         self.update_views()
 
+    # Gestiona switch stress mode.
     def _switch_stress_mode(self, active):
         try:
             if active:
@@ -1390,6 +1432,7 @@ class MainWindow(QMainWindow):
             self._show_error(str(error))
             self._update_stress_button()
 
+    # Gestiona update stress button.
     def _update_stress_button(self):
         in_stress = self.system.is_in_stress_mode()
         self.stress_button.blockSignals(True)
@@ -1400,6 +1443,7 @@ class MainWindow(QMainWindow):
             self.stress_button.setText("Stress mode")
         self.stress_button.blockSignals(False)
 
+    # Gestiona update mode indicator.
     def _update_mode_indicator(self):
         if self.system.is_in_stress_mode():
             self.mode_label.setText("Mode: STRESS")
@@ -1412,6 +1456,7 @@ class MainWindow(QMainWindow):
                 "color: #52616f; padding-right: 10px;"
             )
 
+    # Gestiona remove event.
     def remove_event(self):
         event_id = self._selected_id()
         if event_id is None:
@@ -1433,6 +1478,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona enqueue report.
     def enqueue_report(self):
         try:
             data = self._read_data(self.report_fields)
@@ -1448,10 +1494,12 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona process next report.
     def process_next_report(self):
         self._show_results([self.system.process_next_report()])
         self.update_views()
 
+    # Gestiona process all reports.
     def process_all_reports(self):
         if self.processing_timer.isActive():
             self.processing_timer.stop()
@@ -1469,6 +1517,7 @@ class MainWindow(QMainWindow):
         self.process_all_button.setText("Pause processing")
         self.statusBar().showMessage("Processing queue...", 3000)
 
+    # Gestiona add zone.
     def add_zone(self):
         name = self.zone_name.text().strip()
         if not name:
@@ -1497,6 +1546,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._show_error(str(error))
 
+    # Gestiona update views.
     def update_views(self):
         self._update_clock()
         self._update_summary()
@@ -1513,6 +1563,7 @@ class MainWindow(QMainWindow):
         self._update_versions_table()
         self._update_audit()
 
+    # Gestiona update undo button.
     def _update_undo_button(self):
         can_undo = self.system.can_undo()
         self.undo_button.setEnabled(can_undo)
@@ -1522,6 +1573,7 @@ class MainWindow(QMainWindow):
         else:
             self.undo_button.setToolTip("No actions to undo")
 
+    # Gestiona update versions table.
     def _update_versions_table(self):
         try:
             versions = self.version_manager.list()
@@ -1551,11 +1603,13 @@ class MainWindow(QMainWindow):
                 self.versions_table.setItem(row, column, item)
         self._update_version_buttons()
 
+    # Gestiona update version buttons.
     def _update_version_buttons(self):
         selected = self._selected_version() is not None
         self.restore_version_button.setEnabled(selected)
         self.delete_version_button.setEnabled(selected)
 
+    # Gestiona selected version.
     def _selected_version(self):
         row = self.versions_table.currentRow()
         if row < 0:
@@ -1563,6 +1617,7 @@ class MainWindow(QMainWindow):
         item = self.versions_table.item(row, 0)
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
+    # Gestiona update clock.
     def _update_clock(self):
         instant = self.system.clock.instant
         self.clock_label.setText(
@@ -1571,6 +1626,7 @@ class MainWindow(QMainWindow):
         if not self.jump_field.hasFocus():
             self.jump_field.setDateTime(self._qdatetime_from_clock())
 
+    # Gestiona update summary.
     def _update_summary(self):
         metrics = self.system.metrics
         values = {
@@ -1598,6 +1654,7 @@ class MainWindow(QMainWindow):
         ]
         self.inorder_text.setPlainText("\n".join(lines))
 
+    # Gestiona update events table.
     def _update_events_table(self):
         self._populating_table = True
         try:
@@ -1635,6 +1692,7 @@ class MainWindow(QMainWindow):
         finally:
             self._populating_table = False
 
+    # Gestiona update reports table.
     def _update_reports_table(self):
         reports = list(self.system.report_queue)
         self.reports_table.setRowCount(len(reports))
@@ -1649,6 +1707,7 @@ class MainWindow(QMainWindow):
                 item.setForeground(QBrush(QColor("#172b4d")))
                 self.reports_table.setItem(row, column, item)
 
+    # Gestiona update map.
     def _update_map(self):
         matrix = self.system.map.matrix_with_events(
             self.system.avl.in_order()
@@ -1676,6 +1735,7 @@ class MainWindow(QMainWindow):
             [str(i) for i in range(rows)]
         )
 
+    # Gestiona update comparison.
     def _update_comparison(self):
         avl = self.system.avl
         bst = self._get_comparison_bst()
@@ -1711,6 +1771,7 @@ class MainWindow(QMainWindow):
             ),
         )
 
+    # Gestiona get comparison bst.
     def _get_comparison_bst(self):
         avl_keys = [
             event.calculate_key() for event in self.system.avl.in_order()
@@ -1730,6 +1791,7 @@ class MainWindow(QMainWindow):
         return bst
 
     @staticmethod
+    # Gestiona fit scene.
     def _fit_scene(view, scene):
         rectangle = scene.itemsBoundingRect().adjusted(-30, -25, 30, 35)
         if rectangle.isEmpty():
@@ -1739,6 +1801,7 @@ class MainWindow(QMainWindow):
         view.resetTransform()
         view.fitInView(rectangle, Qt.AspectRatioMode.KeepAspectRatio)
 
+    # Gestiona draw comparison tree.
     def _draw_comparison_tree(self, scene, root, tree_name):
         scene.clear()
         if root is None:
@@ -1750,6 +1813,7 @@ class MainWindow(QMainWindow):
 
         nodes = []
 
+        # Gestiona count.
         def count(node):
             if node is None:
                 return 0
@@ -1760,6 +1824,7 @@ class MainWindow(QMainWindow):
         positions = {}
         y_spacing = 105.0
 
+        # Gestiona assign positions.
         def assign_positions(node, level, minimum, maximum):
             if node is None:
                 return
@@ -1820,6 +1885,7 @@ class MainWindow(QMainWindow):
         view.resetTransform()
         view.fitInView(rectangle, Qt.AspectRatioMode.KeepAspectRatio)
 
+    # Gestiona update history table.
     def _update_history_table(self):
         events = sorted(
             self.system._historical_events.values(),
@@ -1843,6 +1909,7 @@ class MainWindow(QMainWindow):
                 self.history_table.setItem(row, column, item)
         self._update_history_detail()
 
+    # Gestiona update archive status.
     def _update_archive_status(self):
         try:
             result = preview_archive(self.system)
@@ -1881,6 +1948,7 @@ class MainWindow(QMainWindow):
             f"Current T: {self.system.parameters.t:.1f} hours"
         )
 
+    # Gestiona update history detail.
     def _update_history_detail(self):
         row = self.history_table.currentRow()
         if row < 0:
@@ -1916,9 +1984,11 @@ class MainWindow(QMainWindow):
         )
         self.history_detail_text.setPlainText(text)
 
+    # Gestiona preview archive history.
     def preview_archive_history(self):
         self._update_archive_status()
 
+    # Gestiona archive branch history.
     def archive_branch_history(self):
         result = preview_archive(self.system)
         if not result["eligible"]:
@@ -1945,6 +2015,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(result["message"], 5000)
         self.update_views()
 
+    # Gestiona update tree graphic.
     def _update_tree_graphic(self):
         self.tree_scene.clear()
         root = self.system.avl.root
@@ -1963,6 +2034,7 @@ class MainWindow(QMainWindow):
 
         positions = {}
 
+        # Gestiona assign positions.
         def assign_positions(node, level, x_min, x_max):
             if node is None:
                 return
@@ -1983,6 +2055,7 @@ class MainWindow(QMainWindow):
         link_pen = QPen(QColor("#8aa0b8"), 2)
         link_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
 
+        # Gestiona draw links.
         def draw_links(node):
             if node is None:
                 return
@@ -2003,6 +2076,7 @@ class MainWindow(QMainWindow):
 
         draw_links(root)
 
+        # Gestiona draw nodes.
         def draw_nodes(node):
             if node is None:
                 return
@@ -2047,6 +2121,7 @@ class MainWindow(QMainWindow):
         )
         self.tree_scene.setSceneRect(rectangle)
 
+    # Gestiona reset tree view.
     def _reset_tree_view(self):
         self.tree_view.resetTransform()
         rect = self.tree_scene.itemsBoundingRect().adjusted(
@@ -2058,11 +2133,13 @@ class MainWindow(QMainWindow):
             rect, Qt.AspectRatioMode.KeepAspectRatio
         )
 
+    # Gestiona update event buttons.
     def _update_event_buttons(self):
         has_selection = self._selected_id() is not None
         self.review_button.setEnabled(has_selection)
         self.remove_button.setEnabled(has_selection)
 
+    # Gestiona selected id.
     def _selected_id(self):
         row = self.events_table.currentRow()
         if row < 0:
@@ -2070,6 +2147,7 @@ class MainWindow(QMainWindow):
         item = self.events_table.item(row, 0)
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
+    # Gestiona show results.
     def _show_results(self, results):
         lines = []
         for index, result in enumerate(results, start=1):
@@ -2093,6 +2171,7 @@ class MainWindow(QMainWindow):
     # PERSISTENT VERSIONS
     # =========================================================
 
+    # Gestiona save version.
     def save_version(self):
         name = self.version_name_field.text()
         try:
@@ -2110,6 +2189,7 @@ class MainWindow(QMainWindow):
             f"Version '{version['name']}' saved", 5000
         )
 
+    # Gestiona restore version.
     def restore_version(self):
         name = self._selected_version()
         if name is None:
@@ -2144,6 +2224,7 @@ class MainWindow(QMainWindow):
             f"Version '{name}' restored", 5000
         )
 
+    # Gestiona delete version.
     def delete_version(self):
         name = self._selected_version()
         if name is None:
@@ -2172,12 +2253,14 @@ class MainWindow(QMainWindow):
     # =========================================================
 
     @staticmethod
+    # Gestiona data dir.
     def _data_dir():
         root = Path(__file__).resolve().parent.parent.parent
         folder = root / "data"
         folder.mkdir(exist_ok=True)
         return folder
 
+    # Gestiona select json file.
     def _select_json_file(self, title):
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -2187,6 +2270,7 @@ class MainWindow(QMainWindow):
         )
         return path
 
+    # Gestiona save json.
     def save_json(self):
         suggested = str(self._data_dir() / "sismolab_state.json")
         path, _ = QFileDialog.getSaveFileName(
@@ -2213,6 +2297,7 @@ class MainWindow(QMainWindow):
                 f"Could not save the file:\n{e}",
             )
 
+    # Gestiona load json topology.
     def load_json_topology(self):
         path = self._select_json_file("Load topology from JSON")
         if not path:
@@ -2252,6 +2337,7 @@ class MainWindow(QMainWindow):
             f"{'active' if self.system.is_in_stress_mode() else 'inactive'}",
         )
 
+    # Gestiona load json insertions.
     def load_json_insertions(self):
         path = self._select_json_file(
             "Load by insertions from JSON"
@@ -2305,6 +2391,7 @@ class MainWindow(QMainWindow):
             f"Go to the 'AVL vs BST' tab to see the trees.", 8000
         )
 
+    # Gestiona show expensive access.
     def _show_expensive_access(self):
         events = self.system.events_with_expensive_access()
         if not events:
@@ -2326,16 +2413,19 @@ class MainWindow(QMainWindow):
             "\n".join(lines)
         )
 
+    # Gestiona show error.
     def _show_error(self, message):
         QMessageBox.warning(self, "Invalid data", message)
 
 
+# Gestiona excepthook.
 def _excepthook(exc_type, exc_value, exc_tb):
     """Prints unhandled exceptions instead of letting Qt abort silently."""
     import traceback
     traceback.print_exception(exc_type, exc_value, exc_tb)
 
 
+# Gestiona run application.
 def run_application():
     """Starts the desktop application."""
     sys.excepthook = _excepthook

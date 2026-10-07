@@ -1,6 +1,9 @@
+# Módulo map: contiene la lógica relacionada con map.
+# Representa Zone y agrupa sus datos y operaciones.
 class Zone:
     """Represents a rectangular zone inside the simulated map."""
 
+    # Define init.
     def __init__(self, name, x_min, y_min, x_max, y_max, populated):
         self.name = name
         self.x_min = float(x_min)
@@ -9,6 +12,7 @@ class Zone:
         self.y_max = float(y_max)
         self.populated = bool(populated)
 
+    # Gestiona contains point.
     def contains_point(self, x, y):
         """Returns True when the point is inside the zone or on its border."""
         return (
@@ -16,11 +20,13 @@ class Zone:
             and self.y_min <= y <= self.y_max
         )
 
+    # Gestiona symbol.
     def symbol(self):
         return "P" if self.populated else "N"
 
     # === Persistence and copy ===
 
+    # Gestiona to dict.
     def to_dict(self):
         return {
             "name": self.name,
@@ -32,6 +38,7 @@ class Zone:
         }
 
     @classmethod
+    # Gestiona from dict.
     def from_dict(cls, data):
         return cls(
             data["name"],
@@ -40,20 +47,24 @@ class Zone:
             data["populated"],
         )
 
+    # Gestiona copy.
     def copy(self):
         return Zone(
             self.name, self.x_min, self.y_min,
             self.x_max, self.y_max, self.populated,
         )
 
+    # Define repr.
     def __repr__(self):
         kind = "populated" if self.populated else "not populated"
         return f"Zone({self.name}, {kind})"
 
 
+# Representa SeismicMap y agrupa sus datos y operaciones.
 class SeismicMap:
     """Simple matrix map for zones and seismic events."""
 
+    # Define init.
     def __init__(self, width_km=1000, height_km=1000, rows=10, columns=10):
         self.width_km = width_km
         self.height_km = height_km
@@ -61,9 +72,11 @@ class SeismicMap:
         self.columns = columns
         self.zones = []
 
+    # Gestiona add zone.
     def add_zone(self, zone):
         self.zones.append(zone)
 
+    # Gestiona zones of point.
     def zones_of_point(self, x, y):
         return [
             zone
@@ -71,14 +84,17 @@ class SeismicMap:
             if zone.contains_point(float(x), float(y))
         ]
 
+    # Gestiona is in populated zone.
     def is_in_populated_zone(self, x, y):
         zones_of_point = self.zones_of_point(x, y)
         return any(zone.populated for zone in zones_of_point)
 
+    # Gestiona assign zone to event.
     def assign_zone_to_event(self, event):
         event.in_populated_zone = self.is_in_populated_zone(event.x, event.y)
         event.recalculate_priority()
 
+    # Gestiona coordinate to cell.
     def coordinate_to_cell(self, x, y):
         column = int((float(x) / self.width_km) * self.columns)
         row_from_bottom = int((float(y) / self.height_km) * self.rows)
@@ -89,9 +105,11 @@ class SeismicMap:
         row = (self.rows - 1) - row_from_bottom
         return row, column
 
+    # Gestiona empty matrix.
     def empty_matrix(self):
         return [["." for _ in range(self.columns)] for _ in range(self.rows)]
 
+    # Gestiona zones matrix.
     def zones_matrix(self):
         matrix = self.empty_matrix()
         for row in range(self.rows):
@@ -104,6 +122,7 @@ class SeismicMap:
                     matrix[row][column] = "N"
         return matrix
 
+    # Gestiona matrix with events.
     def matrix_with_events(self, events):
         matrix = self.zones_matrix()
         for event in events:
@@ -111,6 +130,7 @@ class SeismicMap:
             matrix[row][column] = "E"
         return matrix
 
+    # Gestiona print matrix.
     def print_matrix(self, matrix):
         print(
             "Legend: . = empty | P = populated zone | "
@@ -119,6 +139,7 @@ class SeismicMap:
         for row in matrix:
             print(" ".join(row))
 
+    # Gestiona cell center.
     def _cell_center(self, row, column):
         cell_width = self.width_km / self.columns
         cell_height = self.height_km / self.rows
@@ -129,6 +150,7 @@ class SeismicMap:
 
     # === Persistence and copy ===
 
+    # Gestiona to dict.
     def to_dict(self):
         return {
             "width_km": self.width_km,
@@ -139,6 +161,7 @@ class SeismicMap:
         }
 
     @classmethod
+    # Gestiona from dict.
     def from_dict(cls, data):
         smap = cls(
             width_km=data["width_km"],
@@ -150,6 +173,7 @@ class SeismicMap:
             smap.add_zone(Zone.from_dict(z))
         return smap
 
+    # Gestiona copy.
     def copy(self):
         new = SeismicMap(
             self.width_km, self.height_km, self.rows, self.columns

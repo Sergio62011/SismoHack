@@ -1,3 +1,4 @@
+# Módulo init: contiene la lógica relacionada con init.
 from .event import Event
 from .report import Report
 from .scenario import Clock, Parameters, Scenario

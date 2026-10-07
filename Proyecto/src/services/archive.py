@@ -1,6 +1,8 @@
+# Módulo archive: contiene la lógica relacionada con archive.
 from services.history import Action
 
 
+# Gestiona is eligible.
 def _is_eligible(event, system):
     if event.priority != 1:
         return False
@@ -10,6 +12,7 @@ def _is_eligible(event, system):
     return age > system.parameters.t
 
 
+# Gestiona find eligible branches.
 def _find_eligible_branches(node, system, depth=0):
     if node is None:
         return [], True, 0
@@ -46,6 +49,7 @@ def _find_eligible_branches(node, system, depth=0):
     return branches, subtree_valid, count
 
 
+# Gestiona select branch.
 def _select_branch(branches):
     if not branches:
         return None
@@ -60,6 +64,7 @@ def _select_branch(branches):
     )
 
 
+# Gestiona preview archive.
 def preview_archive(system):
     branches, _, _ = _find_eligible_branches(
         system.avl.root,
@@ -82,6 +87,7 @@ def preview_archive(system):
     ids = []
     events = []
 
+    # Gestiona collect.
     def collect(node):
         if node is None:
             return
@@ -96,6 +102,7 @@ def preview_archive(system):
         collect(node.right)
 
     # We need to locate the selected root.
+    # Gestiona find.
     def find(node):
         if node is None:
             return None
@@ -127,6 +134,7 @@ def preview_archive(system):
     }
 
 
+# Gestiona archive branch.
 def archive_branch(system):
     previous_state = system._snapshot()
 
@@ -150,6 +158,7 @@ def archive_branch(system):
         # Locate the selected root.
         root = None
 
+        # Gestiona find.
         def find(node):
             if node is None:
                 return None
@@ -169,6 +178,7 @@ def archive_branch(system):
         # Fix the set before modifying the AVL.
         events = []
 
+        # Gestiona collect.
         def collect(node):
             if node is None:
                 return

@@ -1,10 +1,13 @@
+# Módulo event: contiene la lógica relacionada con event.
 from datetime import datetime, timezone
 from typing import Set, Optional
 
 
+# Representa Event y agrupa sus datos y operaciones.
 class Event:
     """Represents a seismic event with all its data."""
 
+    # Define init.
     def __init__(
         self,
         event_id: int,
@@ -39,6 +42,7 @@ class Event:
 
     # === Priority ===
 
+    # Gestiona calculate priority.
     def _calculate_priority(self) -> int:
         if self.magnitude >= 6.0:
             return 3
@@ -52,27 +56,33 @@ class Event:
             return 2
         return 1
 
+    # Gestiona recalculate priority.
     def recalculate_priority(self):
         self.priority = self._calculate_priority()
 
     # === Key ===
 
+    # Gestiona calculate key.
     def calculate_key(self) -> tuple:
         return (self.priority, self.magnitude, self.event_id)
 
     # === Comparison ===
 
+    # Define lt.
     def __lt__(self, other):
         return self.calculate_key() < other.calculate_key()
 
+    # Define eq.
     def __eq__(self, other):
         return self.calculate_key() == other.calculate_key()
 
+    # Define hash.
     def __hash__(self):
         return hash(self.event_id)
 
     # === Persistence and copy ===
 
+    # Gestiona to dict.
     def to_dict(self):
         return {
             "event_id": self.event_id,
@@ -93,6 +103,7 @@ class Event:
         }
 
     @classmethod
+    # Gestiona from dict.
     def from_dict(cls, data):
         dt = datetime.strptime(
             data["datetime"], "%Y-%m-%dT%H:%M:%SZ"
@@ -117,6 +128,7 @@ class Event:
         event.recalculate_priority()
         return event
 
+    # Gestiona copy.
     def copy(self):
         new = Event(
             event_id=self.event_id,
@@ -137,6 +149,7 @@ class Event:
         new.recalculate_priority()
         return new
 
+    # Define repr.
     def __repr__(self):
         return (
             f"Event(id={self.event_id}, M={self.magnitude}, "
