@@ -1,1 +1,112 @@
-{"format": "SismoLab-AVL", "schema_version": 1, "meta": {"modo_carga": "topologia"}, "scenario": {"reloj": {"instante": "2026-09-07T12:00:00Z"}, "parametros": {"w": 24.0, "r": 100.0, "l": 3, "t": 72.0}, "mapa": {"ancho_km": 1000, "alto_km": 1000, "filas": 10, "columnas": 10, "zonas": []}, "estaciones": {"ST-01": {"id_estacion": "ST-01", "nombre": "ST-01"}}}, "execution": {"stress_mode": false, "rotations_total": 1, "last_rotations": [], "last_recovery_cost": null, "metrics": {"correcciones_aceptadas": 0, "reportes_descartados": 0, "conflictos": 0, "confirmaciones": 0, "creados_por_reporte": 0, "reactivados": 0, "archivos_masivos": 0, "eventos_archivados": 0}}, "active_tree": {"root": 110, "nodes": [{"event": {"id_evento": 110, "magnitud": 5.5, "profundidad": 20.0, "x": 250.0, "y": 750.0, "fecha_hora": "2026-09-07T09:00:00Z", "revision": 1, "estado": "pendiente", "estaciones": ["ST-01"], "en_zona_poblada": false, "prioridad": 2, "acceso_costoso": false, "ubicacion": "activo", "referencia": 100, "referenciado_por": []}, "left": 120, "right": 100, "height": 99, "balance_factor": 0}, {"event": {"id_evento": 120, "magnitud": 4.0, "profundidad": 50.0, "x": 750.0, "y": 250.0, "fecha_hora": "2026-09-07T10:00:00Z", "revision": 1, "estado": "pendiente", "estaciones": ["ST-01"], "en_zona_poblada": false, "prioridad": 1, "acceso_costoso": false, "ubicacion": "activo", "referencia": null, "referenciado_por": []}, "left": null, "right": null, "height": 0, "balance_factor": 0}, {"event": {"id_evento": 100, "magnitud": 6.5, "profundidad": 10.0, "x": 250.0, "y": 750.0, "fecha_hora": "2026-09-07T08:00:00Z", "revision": 1, "estado": "pendiente", "estaciones": ["ST-01"], "en_zona_poblada": false, "prioridad": 3, "acceso_costoso": false, "ubicacion": "activo", "referencia": null, "referenciado_por": [110]}, "left": null, "right": null, "height": 0, "balance_factor": 0}]}, "historical_events": [], "removed_ids": [], "report_queue": [], "last_processed_report": null, "insertion_events": [{"id_evento": 110, "magnitud": 5.5, "profundidad": 20.0, "x": 250.0, "y": 750.0, "fecha_hora": "2026-09-07T09:00:00Z", "revision": 1, "estado": "pendiente", "estaciones": ["ST-01"], "en_zona_poblada": false, "prioridad": 2, "acceso_costoso": false, "ubicacion": "activo", "referencia": 100, "referenciado_por": []}, {"id_evento": 120, "magnitud": 4.0, "profundidad": 50.0, "x": 750.0, "y": 250.0, "fecha_hora": "2026-09-07T10:00:00Z", "revision": 1, "estado": "pendiente", "estaciones": ["ST-01"], "en_zona_poblada": false, "prioridad": 1, "acceso_costoso": false, "ubicacion": "activo", "referencia": null, "referenciado_por": []}, {"id_evento": 100, "magnitud": 6.5, "profundidad": 10.0, "x": 250.0, "y": 750.0, "fecha_hora": "2026-09-07T08:00:00Z", "revision": 1, "estado": "pendiente", "estaciones": ["ST-01"], "en_zona_poblada": false, "prioridad": 3, "acceso_costoso": false, "ubicacion": "activo", "referencia": null, "referenciado_por": [110]}]}
+{
+  "format": "SismoLab-AVL",
+  "schema_version": 1,
+  "meta": { "load_mode": "topology" },
+  "scenario": {
+    "clock": { "instant": "2026-09-07T12:00:00Z" },
+    "parameters": { "w": 24.0, "r": 100.0, "l": 3, "t": 72.0 },
+    "map": {
+      "width_km": 1000,
+      "height_km": 1000,
+      "rows": 10,
+      "columns": 10,
+      "zones": []
+    },
+    "stations": { "ST-01": { "station_id": "ST-01", "name": "ST-01" } }
+  },
+  "execution": {
+    "stress_mode": false,
+    "rotations_total": 1,
+    "last_rotations": [],
+    "last_recovery_cost": null,
+    "metrics": {
+      "accepted_corrections": 0,
+      "discarded_reports": 0,
+      "conflicts": 0,
+      "confirmations": 0,
+      "created_by_report": 0,
+      "reactivated": 0,
+      "massive_archives": 0,
+      "archived_events": 0
+    }
+  },
+  "active_tree": {
+    "root": 110,
+    "nodes": [
+      {
+        "event": {
+          "event_id": 110,
+          "magnitude": 5.5,
+          "depth": 20.0,
+          "x": 250.0,
+          "y": 750.0,
+          "datetime": "2026-09-07T09:00:00Z",
+          "revision": 1,
+          "state": "pending",
+          "stations": ["ST-01"],
+          "in_populated_zone": false,
+          "priority": 2,
+          "expensive_access": false,
+          "location": "active",
+          "reference": 100,
+          "referenced_by": []
+        },
+        "left": 120,
+        "right": 100,
+        "height": 99,
+        "balance_factor": 0
+      },
+      {
+        "event": {
+          "event_id": 120,
+          "magnitude": 4.0,
+          "depth": 50.0,
+          "x": 750.0,
+          "y": 250.0,
+          "datetime": "2026-09-07T10:00:00Z",
+          "revision": 1,
+          "state": "pending",
+          "stations": ["ST-01"],
+          "in_populated_zone": false,
+          "priority": 1,
+          "expensive_access": false,
+          "location": "active",
+          "reference": null,
+          "referenced_by": []
+        },
+        "left": null,
+        "right": null,
+        "height": 0,
+        "balance_factor": 0
+      },
+      {
+        "event": {
+          "event_id": 100,
+          "magnitude": 6.5,
+          "depth": 10.0,
+          "x": 250.0,
+          "y": 750.0,
+          "datetime": "2026-09-07T08:00:00Z",
+          "revision": 1,
+          "state": "pending",
+          "stations": ["ST-01"],
+          "in_populated_zone": false,
+          "priority": 3,
+          "expensive_access": false,
+          "location": "active",
+          "reference": null,
+          "referenced_by": [110]
+        },
+        "left": null,
+        "right": null,
+        "height": 0,
+        "balance_factor": 0
+      }
+    ]
+  },
+  "historical_events": [],
+  "removed_ids": [],
+  "report_queue": [],
+  "last_processed_report": null,
+  "insertion_events": []
+}

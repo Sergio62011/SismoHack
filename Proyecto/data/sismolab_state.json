@@ -6,11 +6,11 @@
   },
   "scenario": {
     "clock": {
-      "instant": "2026-09-07T12:00:00Z"
+      "instant": "2026-09-07T00:00:51Z"
     },
     "parameters": {
-      "w": 24.0,
-      "r": 100.0,
+      "w": 48.0,
+      "r": 40.0,
       "l": 3,
       "t": 72.0
     },
@@ -22,9 +22,9 @@
       "zones": []
     },
     "stations": {
-      "ST-01": {
-        "station_id": "ST-01",
-        "name": "ST-01"
+      "st-01": {
+        "station_id": "st-01",
+        "name": "st-01"
       }
     }
   },
@@ -45,44 +45,48 @@
     }
   },
   "active_tree": {
-    "root": 110,
+    "root": 2,
     "nodes": [
       {
         "event": {
-          "event_id": 110,
-          "magnitude": 5.5,
+          "event_id": 2,
+          "magnitude": 5.0,
           "depth": 20.0,
-          "x": 250.0,
-          "y": 750.0,
-          "datetime": "2026-09-07T09:00:00Z",
+          "x": 100.0,
+          "y": 100.0,
+          "datetime": "2026-09-07T00:00:00Z",
           "revision": 1,
           "state": "pending",
-          "stations": ["ST-01"],
+          "stations": [
+            "st-01"
+          ],
           "in_populated_zone": false,
           "priority": 2,
           "expensive_access": false,
           "location": "active",
-          "reference": 100,
+          "reference": null,
           "referenced_by": []
         },
-        "left": 120,
-        "right": 100,
+        "left": 1,
+        "right": 3,
         "height": 1,
         "balance_factor": 0
       },
       {
         "event": {
-          "event_id": 120,
-          "magnitude": 4.0,
-          "depth": 50.0,
-          "x": 750.0,
-          "y": 250.0,
-          "datetime": "2026-09-07T10:00:00Z",
+          "event_id": 1,
+          "magnitude": 5.0,
+          "depth": 20.0,
+          "x": 100.0,
+          "y": 100.0,
+          "datetime": "2026-09-07T00:00:00Z",
           "revision": 1,
           "state": "pending",
-          "stations": ["ST-01"],
+          "stations": [
+            "st-01"
+          ],
           "in_populated_zone": false,
-          "priority": 1,
+          "priority": 2,
           "expensive_access": false,
           "location": "active",
           "reference": null,
@@ -95,21 +99,23 @@
       },
       {
         "event": {
-          "event_id": 100,
-          "magnitude": 6.5,
-          "depth": 10.0,
-          "x": 250.0,
-          "y": 750.0,
-          "datetime": "2026-09-07T08:00:00Z",
+          "event_id": 3,
+          "magnitude": 5.0,
+          "depth": 20.0,
+          "x": 100.0,
+          "y": 100.0,
+          "datetime": "2026-09-07T00:00:00Z",
           "revision": 1,
           "state": "pending",
-          "stations": ["ST-01"],
+          "stations": [
+            "st-01"
+          ],
           "in_populated_zone": false,
-          "priority": 3,
+          "priority": 2,
           "expensive_access": false,
           "location": "active",
           "reference": null,
-          "referenced_by": [110]
+          "referenced_by": []
         },
         "left": null,
         "right": null,
@@ -124,55 +130,61 @@
   "last_processed_report": null,
   "insertion_events": [
     {
-      "event_id": 110,
-      "magnitude": 5.5,
+      "event_id": 2,
+      "magnitude": 5.0,
       "depth": 20.0,
-      "x": 250.0,
-      "y": 750.0,
-      "datetime": "2026-09-07T09:00:00Z",
+      "x": 100.0,
+      "y": 100.0,
+      "datetime": "2026-09-07T00:00:00Z",
       "revision": 1,
       "state": "pending",
-      "stations": ["ST-01"],
+      "stations": [
+        "st-01"
+      ],
       "in_populated_zone": false,
       "priority": 2,
       "expensive_access": false,
       "location": "active",
-      "reference": 100,
+      "reference": null,
       "referenced_by": []
     },
     {
-      "event_id": 120,
-      "magnitude": 4.0,
-      "depth": 50.0,
-      "x": 750.0,
-      "y": 250.0,
-      "datetime": "2026-09-07T10:00:00Z",
+      "event_id": 1,
+      "magnitude": 5.0,
+      "depth": 20.0,
+      "x": 100.0,
+      "y": 100.0,
+      "datetime": "2026-09-07T00:00:00Z",
       "revision": 1,
       "state": "pending",
-      "stations": ["ST-01"],
+      "stations": [
+        "st-01"
+      ],
       "in_populated_zone": false,
-      "priority": 1,
+      "priority": 2,
       "expensive_access": false,
       "location": "active",
       "reference": null,
       "referenced_by": []
     },
     {
-      "event_id": 100,
-      "magnitude": 6.5,
-      "depth": 10.0,
-      "x": 250.0,
-      "y": 750.0,
-      "datetime": "2026-09-07T08:00:00Z",
+      "event_id": 3,
+      "magnitude": 5.0,
+      "depth": 20.0,
+      "x": 100.0,
+      "y": 100.0,
+      "datetime": "2026-09-07T00:00:00Z",
       "revision": 1,
       "state": "pending",
-      "stations": ["ST-01"],
+      "stations": [
+        "st-01"
+      ],
       "in_populated_zone": false,
-      "priority": 3,
+      "priority": 2,
       "expensive_access": false,
       "location": "active",
       "reference": null,
-      "referenced_by": [110]
+      "referenced_by": []
     }
   ]
 }
